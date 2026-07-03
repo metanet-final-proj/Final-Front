@@ -1,182 +1,28 @@
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import chatbotLogo from '../assets/images/chatbot-logo.svg'
 import { useAuthStore } from '../stores/authStore'
+import { useChatStore } from '../stores/chatStore'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const chatStore = useChatStore()
 
 const draft = ref('')
 const typing = ref(false)
-const activeRoomId = ref(1)
 const panelKey = ref(null)
 const threadRef = ref(null)
 const sidebarCollapsed = ref(false)
 const profileMenuOpen = ref(false)
 const logoutLoading = ref(false)
 
-onMounted(() => {
-  if (authStore.isAuthenticated && (!authStore.user || !authStore.employeeProfile)) {
-    authStore.fetchUserContext().catch((error) => {
-      console.warn('Failed to fetch user context:', error)
-    })
-  }
-})
+const editingRoomId = ref(null)
+const editingTitle = ref('')
+const titleSaving = ref(false)
+const timeTick = ref(Date.now())
 
-const rooms = ref([
-  {
-    id: 1,
-    title: '회의실 예약 및 변경/취소 방법',
-    time: '오전 10:43',
-    messages: [
-      {
-        id: 1,
-        role: 'assistant',
-        text: '무엇을 도와드릴까요?',
-        time: '오전 10:42',
-      },
-      {
-        id: 2,
-        role: 'user',
-        text: '회의실 예약 및 변경/취소 방법 알려줘',
-        time: '오전 10:43',
-      },
-      {
-        id: 3,
-        role: 'assistant',
-        tag: '회의실 예약',
-        time: '오전 10:43',
-        text:
-          '회의실 예약을 도와드릴게요.\n' +
-          '1. 원하시는 날짜와 시간, 인원을 말씀해 주세요.\n' +
-          '2. 가용 회의실을 조회해 드립니다.\n' +
-          '3. 선택하시면 바로 예약이 완료됩니다.\n\n' +
-          '예약 변경이나 취소도 대화로 요청할 수 있습니다.',
-      },
-    ],
-  },
-  {
-    id: 2,
-    title: '새 대화',
-    time: '오전 10:42',
-    messages: [
-      {
-        id: 1,
-        role: 'assistant',
-        text: '무엇을 도와드릴까요?',
-        time: '오전 10:42',
-      },
-    ],
-  },
-  {
-    id: 3,
-    title: '회의실 예약 문의',
-    time: '오전 09:31',
-    messages: [
-      {
-        id: 1,
-        role: 'assistant',
-        text: '무엇을 도와드릴까요?',
-        time: '오전 09:30',
-      },
-      {
-        id: 2,
-        role: 'user',
-        text: '오늘 3시 이후 가용 회의실 알려줘',
-        time: '오전 09:31',
-      },
-      {
-        id: 3,
-        role: 'assistant',
-        tag: '회의실 예약',
-        time: '오전 09:31',
-        text:
-          '오늘 15:00 이후 가용 회의실 목록입니다.\n' +
-          '• 15:00 ~ 16:00  가용: 중회의실2 (8석), 회의실 A (12석)\n' +
-          '• 16:00 ~ 17:00  가용: 중회의실2 (8석), 회의실 B (6석), 대회의실 (20석)\n' +
-          '• 17:00 ~ 18:00  가용: 회의실 B (6석), 대회의실 (20석)\n\n' +
-          '원하시는 시간과 회의실을 말씀해 주시면 예약을 도와드릴게요.',
-      },
-    ],
-  },
-  {
-    id: 4,
-    title: '방문객 주차 등록',
-    time: '오전 09:33',
-    messages: [
-      {
-        id: 1,
-        role: 'user',
-        text: '방문객 주차 등록하고 싶어',
-        time: '오전 09:33',
-      },
-      {
-        id: 2,
-        role: 'assistant',
-        tag: '주차',
-        time: '오전 09:33',
-        text:
-          '방문객 주차 등록 방법을 안내해 드릴게요.\n' +
-          '1. [주차 관리] > [방문객 주차 등록] 메뉴로 이동합니다.\n' +
-          '2. 방문객 정보(이름, 연락처, 방문 목적, 방문 시간)를 입력합니다.\n' +
-          '3. 차량 번호를 입력하고 등록을 완료합니다.\n' +
-          '4. 등록 완료 후 문자로 주차 QR코드가 발송됩니다.\n\n' +
-          '※ 방문객은 등록된 시간 내 출차 시 정산 없이 이용 가능합니다.',
-      },
-    ],
-  },
-  {
-    id: 5,
-    title: '구내식당 혼잡도',
-    time: '오전 12:05',
-    messages: [
-      {
-        id: 1,
-        role: 'user',
-        text: '구내식당 지금 혼잡해?',
-        time: '오전 12:05',
-      },
-      {
-        id: 2,
-        role: 'assistant',
-        tag: '실시간 정보',
-        time: '오전 12:05',
-        text:
-          "구내식당 현재 혼잡도는 '보통' 입니다. (12:05 기준)\n" +
-          '• 혼잡도: 보통 (예상 대기 5분 이내)\n' +
-          '• 좌석 이용률: 58%\n\n' +
-          '오늘 메뉴: 돈까스, 된장찌개, 잡곡밥, 샐러드 외 3종',
-      },
-    ],
-  },
-  {
-    id: 6,
-    title: '비품 신청 절차',
-    time: '오후 02:10',
-    messages: [
-      {
-        id: 1,
-        role: 'user',
-        text: '비품 신청 방법 알려줘',
-        time: '오후 02:10',
-      },
-      {
-        id: 2,
-        role: 'assistant',
-        tag: 'RAG 문서검색',
-        time: '오후 02:10',
-        text:
-          '비품 신청 방법을 안내해 드릴게요.\n' +
-          '1. [비품 신청] 메뉴에서 필요한 비품을 검색합니다.\n' +
-          '2. 수량과 사용 목적을 입력하고 신청서를 작성합니다.\n' +
-          '3. 팀장 결재 후 경영지원팀에서 검토하여 발송합니다.\n' +
-          '4. 일반 비품은 1~2일 이내, 재고가 없는 경우 3~5일 소요됩니다.\n\n' +
-          '관련 규정: 비품 관리 규정 제3조(신청 절차) 참고',
-      },
-    ],
-  },
-])
+let timeTimer = null
 
 const shortcuts = [
   {
@@ -383,9 +229,11 @@ const panels = {
   },
 }
 
-const activeRoom = computed(() => {
-  return rooms.value.find((room) => room.id === activeRoomId.value) || rooms.value[0]
-})
+const rooms = computed(() => chatStore.rooms)
+
+const activeRoomId = computed(() => chatStore.activeConversationId)
+
+const activeRoom = computed(() => chatStore.activeRoom)
 
 const currentPanel = computed(() => {
   if (!panelKey.value) return null
@@ -428,6 +276,34 @@ const nowTime = () => {
   return `${period} ${String(displayHour).padStart(2, '0')}:${minute}`
 }
 
+const formatRelativeTime = (value) => {
+  timeTick.value
+
+  if (!value) return '방금 전'
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return '방금 전'
+  }
+
+  const diffMs = Date.now() - date.getTime()
+  const diffSeconds = Math.max(0, Math.floor(diffMs / 1000))
+  const diffMinutes = Math.floor(diffSeconds / 60)
+  const diffHours = Math.floor(diffMinutes / 60)
+  const diffDays = Math.floor(diffHours / 24)
+  const diffMonths = Math.floor(diffDays / 30)
+  const diffYears = Math.floor(diffDays / 365)
+
+  if (diffSeconds < 60) return '방금 전'
+  if (diffMinutes < 60) return `${diffMinutes}분 전`
+  if (diffHours < 24) return `${diffHours}시간 전`
+  if (diffDays < 30) return `${diffDays}일 전`
+  if (diffMonths < 12) return `${diffMonths}달 전`
+
+  return `${diffYears}년 전`
+}
+
 const scrollThread = async () => {
   await nextTick()
 
@@ -442,34 +318,39 @@ const getRoomPreview = (room) => {
 }
 
 const selectRoom = (roomId) => {
-  activeRoomId.value = roomId
+  chatStore.setActiveConversation(roomId)
   typing.value = false
   scrollThread()
 }
 
-const updateActiveRoom = (updater) => {
-  rooms.value = rooms.value.map((room) => {
-    if (room.id !== activeRoomId.value) return room
-    return updater(room)
+const ensureActiveConversation = async () => {
+  if (activeRoomId.value) {
+    return activeRoomId.value
+  }
+
+  const conversation = await chatStore.createConversation({
+    title: '새 채팅',
+    chatType: 'GENERAL',
   })
+
+  return conversation.conversationId
 }
 
-const appendMessage = (message) => {
-  updateActiveRoom((room) => ({
-    ...room,
-    time: message.time,
-    title:
-      room.title === '새 대화' && message.role === 'user'
-        ? message.text.slice(0, 18)
-        : room.title,
-    messages: [...room.messages, message],
-  }))
-}
-
-const sendMessage = (text = draft.value) => {
+const sendMessage = async (text = draft.value) => {
   const messageText = text.trim()
 
   if (!messageText || typing.value) return
+
+  let conversationId
+
+  try {
+    conversationId = await ensureActiveConversation()
+  } catch (error) {
+    console.error('Failed to create conversation before sending:', error)
+    return
+  }
+
+  const currentRoomTitle = activeRoom.value?.title
 
   const userMessage = {
     id: Date.now(),
@@ -479,7 +360,19 @@ const sendMessage = (text = draft.value) => {
   }
 
   draft.value = ''
-  appendMessage(userMessage)
+  chatStore.appendLocalMessage(conversationId, userMessage)
+
+  if (
+    currentRoomTitle === '새 채팅' ||
+    currentRoomTitle === '새 대화' ||
+    !currentRoomTitle
+  ) {
+    chatStore.updateConversationTitle(conversationId, messageText.slice(0, 18))
+      .catch((error) => {
+        console.error('Failed to update conversation title:', error)
+      })
+  }
+
   typing.value = true
   scrollThread()
 
@@ -495,7 +388,7 @@ const sendMessage = (text = draft.value) => {
   }
 
   setTimeout(() => {
-    appendMessage({
+    chatStore.appendLocalMessage(conversationId, {
       id: Date.now() + 1,
       role: 'assistant',
       tag: botReply.tag,
@@ -508,31 +401,88 @@ const sendMessage = (text = draft.value) => {
   }, 900)
 }
 
-const createNewChat = () => {
-  const id = Date.now()
+const createNewChat = async () => {
+  if (chatStore.creating) return
 
-  rooms.value = [
-    {
-      id,
-      title: '새 대화',
-      time: nowTime(),
-      messages: [
-        {
-          id: 1,
-          role: 'assistant',
-          text: '무엇을 도와드릴까요?',
-          time: nowTime(),
-        },
-      ],
-    },
-    ...rooms.value,
-  ]
+  try {
+    await chatStore.createConversation({
+      title: '새 채팅',
+      chatType: 'GENERAL',
+    })
 
-  activeRoomId.value = id
-  panelKey.value = null
-  typing.value = false
-  draft.value = ''
-  scrollThread()
+    panelKey.value = null
+    typing.value = false
+    draft.value = ''
+    await scrollThread()
+  } catch (error) {
+    console.error('Failed to create chat conversation:', error)
+  }
+}
+
+const deleteChatRoom = async (roomId) => {
+  if (!roomId || chatStore.deleting) return
+
+  const ok = window.confirm('이 채팅방을 삭제할까요?')
+
+  if (!ok) return
+
+  try {
+    await chatStore.deleteConversation(roomId)
+    typing.value = false
+    draft.value = ''
+    await scrollThread()
+  } catch (error) {
+    console.error('Failed to delete chat conversation:', error)
+  }
+}
+
+const startEditRoomTitle = async (room) => {
+  chatStore.setActiveConversation(room.id)
+
+  editingRoomId.value = room.id
+  editingTitle.value = room.title || ''
+
+  await nextTick()
+
+  const input = document.querySelector(`[data-room-title-input="${room.id}"]`)
+
+  if (input) {
+    input.focus()
+    input.select()
+  }
+}
+
+const cancelEditRoomTitle = () => {
+  editingRoomId.value = null
+  editingTitle.value = ''
+}
+
+const saveEditRoomTitle = async (room) => {
+  if (!room || titleSaving.value) return
+
+  const nextTitle = editingTitle.value.trim()
+
+  if (!nextTitle) {
+    cancelEditRoomTitle()
+    return
+  }
+
+  if (nextTitle === room.title) {
+    cancelEditRoomTitle()
+    return
+  }
+
+  titleSaving.value = true
+
+  try {
+    await chatStore.updateConversationTitle(room.id, nextTitle)
+  } catch (error) {
+    console.error('Failed to update chat conversation title:', error)
+    window.alert('채팅방 이름 수정에 실패했습니다.')
+  } finally {
+    titleSaving.value = false
+    cancelEditRoomTitle()
+  }
 }
 
 const togglePanel = (key) => {
@@ -572,6 +522,35 @@ const handleLogout = async () => {
     profileMenuOpen.value = false
   }
 }
+
+onMounted(async () => {
+  if (
+    authStore.isAuthenticated &&
+    typeof authStore.fetchUserContext === 'function' &&
+    (!authStore.user || !authStore.employeeProfile)
+  ) {
+    authStore.fetchUserContext().catch((error) => {
+      console.warn('Failed to fetch user context:', error)
+    })
+  }
+
+  try {
+    await chatStore.fetchConversations()
+    await scrollThread()
+  } catch (error) {
+    console.error('Failed to fetch chat conversations:', error)
+  }
+
+  timeTimer = window.setInterval(() => {
+    timeTick.value = Date.now()
+  }, 60 * 1000)
+})
+
+onBeforeUnmount(() => {
+  if (timeTimer) {
+    window.clearInterval(timeTimer)
+  }
+})
 </script>
 
 <template>
@@ -686,7 +665,7 @@ const handleLogout = async () => {
           <div class="sidebar-top">
             <button class="new-chat-button" type="button" @click="createNewChat">
               <span>＋</span>
-              새 대화 시작
+              {{ chatStore.creating ? '생성 중...' : '새 대화 시작' }}
             </button>
 
             <button
@@ -718,21 +697,68 @@ const handleLogout = async () => {
               <span>{{ roomCount }}개</span>
             </div>
 
-            <div class="room-list">
-              <button
+            <div v-if="chatStore.loading" class="room-loading">
+              채팅방을 불러오는 중입니다.
+            </div>
+
+            <div v-else-if="rooms.length === 0" class="room-empty">
+              <p>아직 채팅방이 없습니다.</p>
+              <button type="button" @click="createNewChat">
+                첫 채팅방 만들기
+              </button>
+            </div>
+
+            <div v-else class="room-list">
+              <article
                 v-for="room in rooms"
                 :key="room.id"
                 class="room-item"
                 :class="{ active: room.id === activeRoomId }"
-                type="button"
                 @click="selectRoom(room.id)"
               >
-                <div class="room-top">
-                  <strong>{{ room.title }}</strong>
-                  <span>{{ room.time }}</span>
+                <div class="room-select-body">
+                  <div class="room-top">
+                    <template v-if="editingRoomId === room.id">
+                      <input
+                        v-model="editingTitle"
+                        class="room-title-input"
+                        type="text"
+                        maxlength="255"
+                        :data-room-title-input="room.id"
+                        :disabled="titleSaving"
+                        @click.stop
+                        @blur="saveEditRoomTitle(room)"
+                        @keydown.enter.stop.prevent="saveEditRoomTitle(room)"
+                        @keydown.esc.stop.prevent="cancelEditRoomTitle"
+                      />
+                    </template>
+
+                    <template v-else>
+                      <button
+                        class="room-title-button"
+                        type="button"
+                        title="채팅방 이름 수정"
+                        @click.stop="startEditRoomTitle(room)"
+                      >
+                        {{ room.title }}
+                      </button>
+                    </template>
+
+                    <span>{{ formatRelativeTime(room.createdAt) }}</span>
+                  </div>
+
+                  <p>{{ getRoomPreview(room) }}</p>
                 </div>
-                <p>{{ getRoomPreview(room) }}</p>
-              </button>
+
+                <button
+                  class="room-delete-button"
+                  type="button"
+                  aria-label="채팅방 삭제"
+                  @click.stop="deleteChatRoom(room.id)"
+                >
+                  ×
+                </button>
+              </article>
             </div>
           </section>
 
@@ -891,7 +917,7 @@ const handleLogout = async () => {
             </button>
           </div>
 
-          <p>AI가 생성한 답변은 참고용으로 활용해 주세요.</p>
+          <p>현재 채팅 메시지는 화면 세션에서만 표시되며, 메시지 저장은 Kafka/Redis 연동 후 적용됩니다.</p>
         </section>
       </main>
 
@@ -1301,6 +1327,28 @@ const handleLogout = async () => {
   padding: 0;
 }
 
+.room-loading,
+.room-empty {
+  padding: 18px 10px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--color-muted);
+}
+
+.room-empty p {
+  margin: 0 0 12px;
+}
+
+.room-empty button {
+  border: none;
+  background: var(--color-primary-light);
+  color: var(--color-white);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
 .room-list {
   max-height: 326px;
   overflow-y: auto;
@@ -1329,10 +1377,12 @@ const handleLogout = async () => {
   min-height: 74px;
   border: 1px solid transparent;
   background: transparent;
-  text-align: left;
-  padding: 11px 12px;
   border-radius: 11px;
   flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  position: relative;
+  cursor: pointer;
 }
 
 .room-item:hover {
@@ -1344,6 +1394,35 @@ const handleLogout = async () => {
   background: var(--color-primary-soft);
 }
 
+.room-select-body {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 34px 11px 12px;
+  border-radius: 11px;
+}
+
+.room-delete-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-placeholder);
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.room-delete-button:hover {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
 .room-top {
   display: flex;
   align-items: center;
@@ -1351,8 +1430,13 @@ const handleLogout = async () => {
   gap: 8px;
 }
 
-.room-top strong {
+.room-title-button {
+  flex: 1;
   min-width: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  text-align: left;
   font-size: 13px;
   font-weight: 600;
   color: #4a5570;
@@ -1361,9 +1445,33 @@ const handleLogout = async () => {
   text-overflow: ellipsis;
 }
 
-.room-item.active .room-top strong {
+.room-title-button:hover {
+  color: var(--color-primary-light);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.room-item.active .room-title-button {
   color: var(--color-primary);
   font-weight: 800;
+}
+
+.room-title-input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  border: 1px solid var(--color-primary-light);
+  background: var(--color-white);
+  color: var(--color-text);
+  border-radius: 7px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
+.room-title-input:disabled {
+  opacity: 0.65;
 }
 
 .room-top span {
