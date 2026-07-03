@@ -1,9 +1,11 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import chatbotLogo from '../assets/images/chatbot-logo.svg'
+import { useAuthStore } from '../stores/authStore'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const draft = ref('')
 const typing = ref(false)
@@ -11,6 +13,16 @@ const activeRoomId = ref(1)
 const panelKey = ref(null)
 const threadRef = ref(null)
 const sidebarCollapsed = ref(false)
+const profileMenuOpen = ref(false)
+const logoutLoading = ref(false)
+
+onMounted(() => {
+  if (authStore.isAuthenticated && (!authStore.user || !authStore.employeeProfile)) {
+    authStore.fetchUserContext().catch((error) => {
+      console.warn('Failed to fetch user context:', error)
+    })
+  }
+})
 
 const rooms = ref([
   {
@@ -382,6 +394,30 @@ const currentPanel = computed(() => {
 
 const roomCount = computed(() => rooms.value.length)
 
+const profileName = computed(() => {
+  return authStore.displayName || authStore.user?.displayName || '사용자'
+})
+
+const profileInitial = computed(() => {
+  return profileName.value.slice(0, 1)
+})
+
+const profileJobTitle = computed(() => {
+  return authStore.jobTitle || authStore.employeeProfile?.jobTitle || '직원'
+})
+
+const profileDepartment = computed(() => {
+  return authStore.department || authStore.employeeProfile?.department || '소속 정보 없음'
+})
+
+const profileEmail = computed(() => {
+  return authStore.email || authStore.user?.email || '이메일 정보 없음'
+})
+
+const profileHeaderText = computed(() => {
+  return `${profileName.value} ${profileJobTitle.value}`.trim()
+})
+
 const nowTime = () => {
   const date = new Date()
   const hour = date.getHours()
@@ -519,8 +555,22 @@ const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
 
-const logout = () => {
-  router.push('/login')
+const toggleProfileMenu = () => {
+  profileMenuOpen.value = !profileMenuOpen.value
+}
+
+const handleLogout = async () => {
+  if (logoutLoading.value) return
+
+  logoutLoading.value = true
+
+  try {
+    await authStore.logout()
+    router.replace('/login')
+  } finally {
+    logoutLoading.value = false
+    profileMenuOpen.value = false
+  }
 }
 </script>
 
@@ -540,13 +590,58 @@ const logout = () => {
           시스템 정상
         </div>
 
-        <button class="profile-box" type="button" @click="logout">
-          <div class="profile-avatar">김</div>
-          <div>
-            <strong>김지현 대리</strong>
-            <span>경영지원팀</span>
+        <div class="profile-area">
+          <button class="profile-box" type="button" @click="toggleProfileMenu">
+            <div class="profile-avatar">{{ profileInitial }}</div>
+
+            <div class="profile-summary">
+              <strong>{{ profileHeaderText }}</strong>
+              <span>{{ profileDepartment }}</span>
+            </div>
+
+            <svg
+              class="profile-chevron"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#6B7690"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              :class="{ open: profileMenuOpen }"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          <div v-if="profileMenuOpen" class="profile-menu">
+            <div class="profile-menu-user">
+              <strong>{{ profileHeaderText }}</strong>
+
+              <dl class="profile-detail-list">
+                <div>
+                  <dt>소속</dt>
+                  <dd>{{ profileDepartment }}</dd>
+                </div>
+
+                <div>
+                  <dt>이메일</dt>
+                  <dd>{{ profileEmail }}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <button
+              class="logout-button"
+              type="button"
+              :disabled="logoutLoading"
+              @click="handleLogout"
+            >
+              {{ logoutLoading ? '로그아웃 중...' : '로그아웃' }}
+            </button>
           </div>
-        </button>
+        </div>
       </div>
     </header>
 
@@ -696,7 +791,7 @@ const logout = () => {
             />
 
             <div>
-              <h2>안녕하세요, 김지현 님!</h2>
+              <h2>안녕하세요, {{ profileName }} 님!</h2>
               <p>
                 회의실 예약, 주차 등록, 식당 정보, 비품 신청, 사내 규정 등<br />
                 업무 관련 문의를 자연스럽게 질문해 주세요.
@@ -909,6 +1004,10 @@ const logout = () => {
   animation: tanetPulse 2.4s ease-in-out infinite;
 }
 
+.profile-area {
+  position: relative;
+}
+
 .profile-box {
   border: none;
   background: transparent;
@@ -934,23 +1033,116 @@ const logout = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
-.profile-box div:last-child {
+.profile-summary {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 1px;
+  min-width: 0;
 }
 
-.profile-box strong {
+.profile-summary strong {
+  max-width: 150px;
   font-size: 13px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-summary span {
+  max-width: 150px;
+  font-size: 11.5px;
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.profile-chevron.open {
+  transform: rotate(180deg);
+}
+
+.profile-menu {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  width: 270px;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(23, 48, 110, 0.14);
+  padding: 12px;
+  z-index: 20;
+}
+
+.profile-menu-user {
+  padding: 8px 8px 12px;
+  border-bottom: 1px solid var(--color-border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-menu-user > strong {
+  font-size: 14px;
   color: var(--color-text);
 }
 
-.profile-box span {
-  font-size: 11.5px;
+.profile-detail-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-detail-list div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.profile-detail-list dt {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--color-subtle);
+}
+
+.profile-detail-list dd {
+  margin: 0;
+  font-size: 12.5px;
   color: var(--color-muted);
+  word-break: break-all;
+}
+
+.logout-button {
+  width: 100%;
+  margin-top: 10px;
+  border: none;
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.logout-button:hover {
+  background: #fde6e4;
+}
+
+.logout-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .chat-body {
@@ -1693,8 +1885,9 @@ const logout = () => {
     display: none;
   }
 
-  .profile-box div:last-child {
-    display: none;
+  .profile-summary strong,
+  .profile-summary span {
+    max-width: 100px;
   }
 
   .chat-body {

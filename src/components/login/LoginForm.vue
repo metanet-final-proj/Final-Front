@@ -1,12 +1,11 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
 import loginIcon from '../../assets/images/login-logo.svg'
-
-const router = useRouter()
 
 const loading = ref(false)
 const error = ref('')
+
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
 const loginWithAzure = () => {
   if (loading.value) return
@@ -14,10 +13,12 @@ const loginWithAzure = () => {
   error.value = ''
   loading.value = true
 
-  // TODO: Azure SSO 연동 시 실제 SSO 요청 URL로 교체
-  setTimeout(() => {
-    router.push('/chat')
-  }, 500)
+  try {
+    window.location.href = `${apiBaseUrl}/oauth2/authorization/azure`
+  } catch {
+    loading.value = false
+    error.value = '로그인 페이지로 이동하지 못했습니다.'
+  }
 }
 </script>
 
@@ -58,7 +59,7 @@ const loginWithAzure = () => {
           <span></span>
         </span>
 
-        {{ loading ? '서비스로 이동 중...' : '사내 계정으로 계속하기' }}
+        {{ loading ? '인증 페이지로 이동 중...' : '사내 계정으로 계속하기' }}
       </button>
 
       <p class="sub-guide">
