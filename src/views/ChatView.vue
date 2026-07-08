@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import chatbotLogo from '../assets/images/chatbot-logo.svg'
+import chatbotLogo from '../assets/images/officelink-logo.svg'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import MarkdownIt from 'markdown-it'
@@ -45,6 +45,29 @@ const titleSaving = ref(false)
 const timeTick = ref(Date.now())
 
 let timeTimer = null
+
+const resizeComposer = async () => {
+  await nextTick()
+
+  const textarea = composerInputRef.value
+  if (!textarea) return
+
+  const maxHeight = 80
+
+  textarea.style.height = 'auto'
+  textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+}
+
+watch(
+  draft,
+  () => {
+    resizeComposer()
+  },
+  {
+    flush: 'post',
+  },
+)
 
 const shortcuts = [
   {
@@ -1024,6 +1047,7 @@ onBeforeUnmount(() => {
           rows="1"
           :disabled="isAnswering"
           placeholder="업무 요청을 입력해 주세요."
+          @input="resizeComposer"
           @keydown="handleComposerKeydown"
         ></textarea>
 
@@ -1130,6 +1154,7 @@ onBeforeUnmount(() => {
           rows="1"
           :disabled="isAnswering"
           :placeholder="isAnswering ? '답변 생성 중입니다. 잠시만 기다려 주세요.' : '채팅을 입력해 주세요.'"
+          @input="resizeComposer"
           @keydown="handleComposerKeydown"
         ></textarea>
 
@@ -1915,9 +1940,11 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(12px);
   border-radius: 24px;
   padding: 14px 16px 14px 22px;
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 46px;
+  align-items: start;
   gap: 14px;
+  overflow: hidden;
 }
 
 .start-composer:focus-within {
@@ -1927,21 +1954,46 @@ onBeforeUnmount(() => {
     0 0 0 4px rgba(27, 67, 150, 0.07);
 }
 
-.start-composer input {
-  flex: 1;
+.start-composer textarea {
+  width: 100%;
   min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  max-height: 80px;
   border: none;
   outline: none;
+  box-shadow: none;
   background: transparent;
   color: var(--color-text);
   font-size: 16px;
+  line-height: 20px;
+  padding: 6px 0 14px;
+  resize: none;
+  overflow-y: auto;
+  box-sizing: border-box;
+  font-family: inherit;
+  appearance: none;
+  align-self: start;
 }
 
-.start-composer input::placeholder {
+.start-composer > svg {
+  justify-self: start;
+  align-self: end;
+  margin-bottom: 13px;
+  flex-shrink: 0;
+}
+
+.start-composer textarea:focus {
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
+.start-composer textarea::placeholder {
   color: #a2adbf;
 }
 
-.start-composer input:disabled {
+.start-composer textarea:disabled {
   cursor: not-allowed;
   color: var(--color-muted);
 }
@@ -1957,6 +2009,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  justify-self: end;
+  align-self: end;
 }
 
 .start-composer button:hover:not(:disabled) {
@@ -2314,12 +2368,50 @@ onBeforeUnmount(() => {
 }
 
 .composer-box {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 40px;
+  align-items: start;
   gap: 12px;
   border: 1.5px solid var(--color-border);
   border-radius: 14px;
   padding: 8px 8px 8px 16px;
+  min-height: 58px;
+  overflow: hidden;
+}
+
+.composer-box > svg {
+  justify-self: start;
+  align-self: end;
+  margin-bottom: 11px;
+  flex-shrink: 0;
+}
+
+.composer-box textarea {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  max-height: 80px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 20px;
+  padding: 6px 0 14px;
+  resize: none;
+  overflow-y: auto;
+  box-sizing: border-box;
+  font-family: inherit;
+  appearance: none;
+  box-shadow: none;
+  align-self: start;
+}
+
+.composer-box textarea:focus {
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 .composer-box:focus-within {
@@ -2329,21 +2421,6 @@ onBeforeUnmount(() => {
 .composer-box:has(textarea:disabled) {
   background: #f8fafd;
   border-color: var(--color-border-light);
-}
-
-.composer-box textarea {
-  flex: 1;
-  min-width: 0;
-  max-height: 120px;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 14px;
-  color: var(--color-text);
-  line-height: 1.5;
-  resize: none;
-  font-family: inherit;
-  overflow-y: auto;
 }
 
 .composer-box textarea::placeholder {
@@ -2367,6 +2444,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   cursor: pointer;
   opacity: 1;
+  justify-self: end;
+  align-self: end;
 }
 
 .composer-box button:hover:not(:disabled) {
@@ -2662,9 +2741,10 @@ onBeforeUnmount(() => {
   min-height: 64px;
   border-radius: 19px;
   padding: 10px 12px 10px 16px;
+  grid-template-columns: 24px minmax(0, 1fr) 40px;
 }
 
-.start-composer input {
+.start-composer textarea {
   font-size: 14px;
 }
 
