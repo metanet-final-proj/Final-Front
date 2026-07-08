@@ -1,21 +1,42 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import chatbotLogo from '../assets/images/chatbot-logo.svg'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
+import MarkdownIt from 'markdown-it'
+import DOMPurify from 'dompurify'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 
+const markdown = new MarkdownIt({
+  html: false,
+  linkify: true,
+  breaks: true,
+})
+
+const renderMarkdown = (text) => {
+  if (!text) return ''
+
+  const html = markdown.render(String(text))
+
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: {
+      html: true,
+    },
+  })
+}
+
 const draft = ref('')
-const typing = ref(false)
 const panelKey = ref(null)
 const threadRef = ref(null)
+const composerInputRef = ref(null)
 const sidebarCollapsed = ref(false)
 const profileMenuOpen = ref(false)
 const logoutLoading = ref(false)
+const businessActionLoading = ref(false)
 
 const editingRoomId = ref(null)
 const editingTitle = ref('')
@@ -76,64 +97,36 @@ const faqs = [
   },
 ]
 
-const replies = [
+const starterCards = [
   {
-    keys: ['회의실', '예약'],
-    tag: '회의실 예약',
-    text:
-      '회의실 예약을 도와드릴게요.\n' +
-      '1. 원하시는 날짜와 시간, 인원을 말씀해 주세요.\n' +
-      '2. 가용 회의실을 조회해 드립니다.\n' +
-      '3. 선택하시면 바로 예약이 완료됩니다.\n\n' +
-      '예) "내일 오후 2시, 6인 회의실 예약해줘"',
+    icon: '📅',
+    title: '회의실 예약',
+    desc: '시간과 인원을 기준으로 회의실을 찾아볼게요.',
+    query: '내일 오후 2시에 6명이 사용할 수 있는 회의실 예약하고 싶어',
   },
   {
-    keys: ['주차', '방문객', '차량'],
-    tag: '주차',
-    text:
-      '방문객 주차 등록 방법을 안내해 드릴게요.\n' +
-      '1. [주차 관리] > [방문객 주차 등록] 메뉴로 이동합니다.\n' +
-      '2. 방문객 정보(이름, 연락처, 방문 목적, 방문 시간)를 입력합니다.\n' +
-      '3. 차량 번호를 입력하고 등록을 완료합니다.\n' +
-      '4. 등록 완료 후 문자로 주차 QR코드가 발송됩니다.\n\n' +
-      '※ 방문객은 등록된 시간 내 출차 시 정산 없이 이용 가능합니다.',
+    icon: '🚗',
+    title: '방문객 주차 등록',
+    desc: '방문 일시와 차량 정보를 기준으로 등록을 도와드릴게요.',
+    query: '방문객 주차 등록하고 싶어',
   },
   {
-    keys: ['운영시간', '몇 시', '몇시'],
-    tag: '식당 정보',
-    text:
-      '구내식당 운영시간 안내입니다.\n' +
-      '• 조식 08:00 ~ 09:00\n' +
-      '• 중식 11:30 ~ 13:30\n' +
-      '• 석식 17:30 ~ 19:00\n\n' +
-      '주말 및 공휴일은 운영하지 않습니다.',
+    icon: '🍽️',
+    title: '구내식당 메뉴',
+    desc: '오늘 메뉴와 운영시간을 확인해볼게요.',
+    query: '오늘 구내식당 메뉴와 운영시간 알려줘',
   },
   {
-    keys: ['혼잡', '식당', '메뉴', '식단'],
-    tag: '실시간 정보',
-    text:
-      "구내식당 현재 혼잡도는 '여유' 입니다.\n" +
-      '• 혼잡도: 여유 (대기 없음)\n' +
-      '• 좌석 이용률: 31%\n\n' +
-      '오늘 메뉴: 돈까스, 된장찌개, 잡곡밥, 샐러드 외 3종',
+    icon: '📦',
+    title: '비품 신청',
+    desc: '필요한 비품 신청 방법을 안내해드릴게요.',
+    query: 'A4 용지와 볼펜 비품 신청하고 싶어',
   },
   {
-    keys: ['비품', '사무용품'],
-    tag: 'RAG 문서검색',
-    text:
-      '비품 신청 방법을 안내해 드릴게요.\n' +
-      '1. [비품 신청] 메뉴에서 필요한 비품을 검색합니다.\n' +
-      '2. 수량과 사용 목적을 입력하고 신청서를 작성합니다.\n' +
-      '3. 팀장 결재 후 경영지원팀에서 검토하여 발송합니다.\n' +
-      '4. 일반 비품은 1~2일 이내, 재고가 없는 경우 3~5일 소요됩니다.\n\n' +
-      '관련 규정: 비품 관리 규정 제3조(신청 절차) 참고',
-  },
-  {
-    keys: ['규정', '연차', '휴가'],
-    tag: 'RAG 문서검색',
-    text:
-      '사내 규정 검색 결과를 안내해 드릴게요.\n' +
-      '관련 규정 문서를 찾았습니다. 구체적인 항목(연차, 경비, 복리후생 등)을 말씀해 주시면 해당 조항을 요약해 드립니다.',
+    icon: '📄',
+    title: '사내 규정 검색',
+    desc: '휴가, 복리후생, 총무 규정을 찾아볼게요.',
+    query: '연차 사용 규정 알려줘',
   },
 ]
 
@@ -235,6 +228,71 @@ const activeRoomId = computed(() => chatStore.activeConversationId)
 
 const activeRoom = computed(() => chatStore.activeRoom)
 
+const activeMessages = computed(() => {
+  return activeRoom.value?.messages || []
+})
+
+const DEFAULT_ASSISTANT_PROMPTS = ['무엇을 도와드릴까요?', '무엇을 도와드릴까요']
+
+const isDefaultAssistantPrompt = (message) => {
+  const role = String(message?.role || '').toLowerCase()
+  const text = String(message?.text || message?.content || '').trim()
+
+  return role === 'assistant' && DEFAULT_ASSISTANT_PROMPTS.includes(text)
+}
+
+const visibleMessages = computed(() => {
+  return activeMessages.value.filter((message) => !isDefaultAssistantPrompt(message))
+})
+
+const normalizeId = (value) => {
+  if (value === null || value === undefined) return ''
+  return String(value)
+}
+
+const extractConversationId = (payload) => {
+  const candidates = [
+    payload?.conversationId,
+    payload?.conversation_id,
+    payload?.id,
+    payload?.data?.conversationId,
+    payload?.data?.conversation_id,
+    payload?.data?.id,
+    payload?.data?.data?.conversationId,
+    payload?.data?.data?.conversation_id,
+    payload?.data?.data?.id,
+    payload?.conversation?.conversationId,
+    payload?.conversation?.conversation_id,
+    payload?.conversation?.id,
+    payload?.data?.conversation?.conversationId,
+    payload?.data?.conversation?.conversation_id,
+    payload?.data?.conversation?.id,
+  ]
+
+  return candidates.find((candidate) => {
+    return candidate !== null && candidate !== undefined && candidate !== ''
+  })
+}
+
+const resetMessagesForConversation = (conversationId) => {
+  if (!conversationId || !chatStore.messagesByConversationId) return
+
+  const key = String(conversationId)
+
+  chatStore.messagesByConversationId = {
+    ...chatStore.messagesByConversationId,
+    [key]: [],
+  }
+}
+
+const showWelcome = computed(() => {
+  if (chatStore.loading || chatStore.messagesLoading) {
+    return false
+  }
+
+  return visibleMessages.value.length === 0
+})
+
 const currentPanel = computed(() => {
   if (!panelKey.value) return null
   return panels[panelKey.value] || null
@@ -264,6 +322,10 @@ const profileEmail = computed(() => {
 
 const profileHeaderText = computed(() => {
   return `${profileName.value} ${profileJobTitle.value}`.trim()
+})
+
+const isAnswering = computed(() => {
+  return chatStore.sending
 })
 
 const nowTime = () => {
@@ -312,15 +374,47 @@ const scrollThread = async () => {
   }
 }
 
-const getRoomPreview = (room) => {
-  const lastMessage = room.messages[room.messages.length - 1]
-  return lastMessage ? lastMessage.text.split('\n')[0] : ''
+const fillDraftFromStarter = async (query) => {
+  if (isAnswering.value) return
+
+  draft.value = query
+
+  await nextTick()
+
+  if (composerInputRef.value) {
+    composerInputRef.value.focus()
+  }
 }
 
-const selectRoom = (roomId) => {
+let scrollAnimationFrameId = null
+
+const requestScrollThread = () => {
+  if (scrollAnimationFrameId) return
+
+  scrollAnimationFrameId = window.requestAnimationFrame(async () => {
+    scrollAnimationFrameId = null
+    await scrollThread()
+  })
+}
+
+const getRoomPreview = (room) => {
+  const messages = (room?.messages || []).filter(
+    (message) => !isDefaultAssistantPrompt(message),
+  )
+  const lastMessage = messages[messages.length - 1]
+
+  return lastMessage?.text ? lastMessage.text.split('\n')[0] : ''
+}
+
+const selectRoom = async (roomId) => {
   chatStore.setActiveConversation(roomId)
-  typing.value = false
-  scrollThread()
+
+  try {
+    await chatStore.fetchMessages(roomId)
+    await scrollThread()
+  } catch (error) {
+    console.error('Failed to fetch chat messages:', error)
+  }
 }
 
 const ensureActiveConversation = async () => {
@@ -339,7 +433,7 @@ const ensureActiveConversation = async () => {
 const sendMessage = async (text = draft.value) => {
   const messageText = text.trim()
 
-  if (!messageText || typing.value) return
+  if (!messageText || isAnswering.value) return
 
   let conversationId
 
@@ -352,67 +446,64 @@ const sendMessage = async (text = draft.value) => {
 
   const currentRoomTitle = activeRoom.value?.title
 
-  const userMessage = {
-    id: Date.now(),
-    role: 'user',
-    text: messageText,
-    time: nowTime(),
-  }
-
   draft.value = ''
-  chatStore.appendLocalMessage(conversationId, userMessage)
+  try {
+    await chatStore.sendMessage(conversationId, messageText)
 
-  if (
-    currentRoomTitle === '새 채팅' ||
-    currentRoomTitle === '새 대화' ||
-    !currentRoomTitle
-  ) {
-    chatStore.updateConversationTitle(conversationId, messageText.slice(0, 18))
-      .catch((error) => {
-        console.error('Failed to update conversation title:', error)
-      })
+    if (
+      currentRoomTitle === '새 채팅' ||
+      currentRoomTitle === '새 대화' ||
+      !currentRoomTitle
+    ) {
+      chatStore.updateConversationTitle(conversationId, messageText.slice(0, 18))
+        .catch((error) => {
+          console.error('Failed to update conversation title:', error)
+        })
+    }
+
+    await scrollThread()
+  } catch (error) {
+    console.error('Failed to send chat message:', error)
+  } finally {
+    await scrollThread()
   }
-
-  typing.value = true
-  scrollThread()
-
-  const matchedReply = replies.find((reply) =>
-    reply.keys.some((key) => messageText.includes(key)),
-  )
-
-  const botReply = matchedReply || {
-    tag: null,
-    text:
-      '문의 주신 내용을 확인하고 있어요.\n' +
-      '회의실 예약, 주차 등록, 식당 정보, 비품 신청, 사내 규정에 대해 도와드릴 수 있습니다. 조금 더 구체적으로 말씀해 주시겠어요?',
-  }
-
-  setTimeout(() => {
-    chatStore.appendLocalMessage(conversationId, {
-      id: Date.now() + 1,
-      role: 'assistant',
-      tag: botReply.tag,
-      text: botReply.text,
-      time: nowTime(),
-    })
-
-    typing.value = false
-    scrollThread()
-  }, 900)
 }
 
 const createNewChat = async () => {
   if (chatStore.creating) return
 
   try {
-    await chatStore.createConversation({
+    const previousConversationId = activeRoomId.value
+
+    const conversation = await chatStore.createConversation({
       title: '새 채팅',
       chatType: 'GENERAL',
     })
 
+    await nextTick()
+
+    const conversationId =
+      extractConversationId(conversation) ||
+      (normalizeId(activeRoomId.value) !== normalizeId(previousConversationId)
+        ? activeRoomId.value
+        : null)
+
+    if (conversationId) {
+      chatStore.setActiveConversation(conversationId)
+      resetMessagesForConversation(conversationId)
+    } else {
+      console.warn('Created conversation id was not found:', conversation)
+    }
+
     panelKey.value = null
-    typing.value = false
     draft.value = ''
+
+    await nextTick()
+
+    if (composerInputRef.value) {
+      composerInputRef.value.focus()
+    }
+
     await scrollThread()
   } catch (error) {
     console.error('Failed to create chat conversation:', error)
@@ -428,7 +519,6 @@ const deleteChatRoom = async (roomId) => {
 
   try {
     await chatStore.deleteConversation(roomId)
-    typing.value = false
     draft.value = ''
     await scrollThread()
   } catch (error) {
@@ -493,12 +583,23 @@ const closePanel = () => {
   panelKey.value = null
 }
 
-const runPanelAction = () => {
-  if (!currentPanel.value) return
+const runPanelAction = async () => {
+  if (!currentPanel.value || businessActionLoading.value) return
 
-  const query = currentPanel.value.actionQuery
-  closePanel()
-  sendMessage(query)
+  businessActionLoading.value = true
+
+  try {
+    // TODO: 업무 처리용 백엔드 API가 연결되면 이 부분을 businessApi 호출로 교체
+    // 예: await businessApi.createMeetingRoomReservation(...)
+    // 현재는 임시로 패널 액션을 채팅 메시지로 전달
+    const query = currentPanel.value.actionQuery
+    closePanel()
+    await sendMessage(query)
+  } catch (error) {
+    console.error('Failed to run panel action:', error)
+  } finally {
+    businessActionLoading.value = false
+  }
 }
 
 const toggleSidebar = () => {
@@ -523,6 +624,17 @@ const handleLogout = async () => {
   }
 }
 
+watch(
+  activeMessages,
+  () => {
+    requestScrollThread()
+  },
+  {
+    deep: true,
+    flush: 'post',
+  },
+)
+
 onMounted(async () => {
   if (
     authStore.isAuthenticated &&
@@ -536,9 +648,14 @@ onMounted(async () => {
 
   try {
     await chatStore.fetchConversations()
+
+    if (activeRoomId.value) {
+      await chatStore.fetchMessages(activeRoomId.value)
+    }
+
     await scrollThread()
   } catch (error) {
-    console.error('Failed to fetch chat conversations:', error)
+    console.error('Failed to fetch chat data:', error)
   }
 
   timeTimer = window.setInterval(() => {
@@ -549,6 +666,10 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (timeTimer) {
     window.clearInterval(timeTimer)
+  }
+
+  if (scrollAnimationFrameId) {
+    window.cancelAnimationFrame(scrollAnimationFrameId)
   }
 })
 </script>
@@ -788,6 +909,7 @@ onBeforeUnmount(() => {
                 v-for="faq in faqs"
                 :key="faq.label"
                 type="button"
+                :disabled="isAnswering"
                 @click="sendMessage(faq.query)"
               >
                 {{ faq.label }}
@@ -807,119 +929,185 @@ onBeforeUnmount(() => {
         </template>
       </aside>
 
-      <main class="chat-main">
-        <section class="welcome-area">
-          <div class="welcome-top">
-            <img
-              class="bot-logo large"
-              :src="chatbotLogo"
-              alt="AI 어시스턴트 로고"
-            />
+      <main class="chat-main" :class="{ 'start-mode': showWelcome }">
+  <template v-if="showWelcome">
+    <section class="start-screen">
+      <div class="start-hero">
+        <img
+          class="bot-logo hero-logo"
+          :src="chatbotLogo"
+          alt="AI 어시스턴트 로고"
+        />
 
-            <div>
-              <h2>안녕하세요, {{ profileName }} 님!</h2>
-              <p>
-                회의실 예약, 주차 등록, 식당 정보, 비품 신청, 사내 규정 등<br />
-                업무 관련 문의를 자연스럽게 질문해 주세요.
-              </p>
-            </div>
-          </div>
-        </section>
+        <p class="start-eyebrow">사내 업무지원 AI 어시스턴트</p>
 
-        <section ref="threadRef" class="thread-area">
-          <div
-            v-for="message in activeRoom.messages"
-            :key="message.id"
-            class="message-row"
-            :class="message.role"
+        <h2>
+          안녕하세요, {{ profileName }} 님!<br />
+          어떤 업무를 도와드릴까요?
+        </h2>
+
+        <p class="start-description">
+          회의실 예약, 주차 등록, 식당 정보, 비품 신청, 사내 규정 검색까지<br />
+          자연어로 편하게 요청해 주세요.
+        </p>
+      </div>
+
+      <div class="start-composer">
+        <svg
+          width="19"
+          height="19"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#9AA4BC"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.4 11.05l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"
+          />
+        </svg>
+
+        <input
+          ref="composerInputRef"
+          v-model="draft"
+          type="text"
+          :disabled="isAnswering"
+          placeholder="업무 요청을 입력해 주세요."
+          @keydown.enter.prevent="sendMessage()"
+        />
+
+        <button
+          type="button"
+          :disabled="isAnswering"
+          @click="sendMessage()"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#FFFFFF"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
           >
-            <template v-if="message.role === 'assistant'">
-              <img
-                class="bot-logo small"
-                :src="chatbotLogo"
-                alt="AI 어시스턴트 로고"
-              />
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <path d="M22 2L15 22l-4-9-9-4 20-7z" />
+          </svg>
+        </button>
+      </div>
 
-              <div class="message-content">
-                <span v-if="message.tag" class="message-tag">
-                  {{ message.tag }}
-                </span>
-                <div class="assistant-bubble">
-                  {{ message.text }}
-                </div>
-                <time>{{ message.time }}</time>
-              </div>
-            </template>
+      <div class="start-chip-list">
+        <button
+          v-for="card in starterCards"
+          :key="`chip-${card.title}`"
+          type="button"
+          :disabled="isAnswering"
+          @click="fillDraftFromStarter(card.query)"
+        >
+          {{ card.title }}
+        </button>
+      </div>
+    </section>
+  </template>
 
-            <template v-else>
-              <div class="user-message-content">
-                <div class="user-bubble">
-                  {{ message.text }}
-                </div>
-                <time>{{ message.time }}</time>
-              </div>
-            </template>
+  <template v-else>
+    <section ref="threadRef" class="thread-area">
+      <div v-if="chatStore.messagesLoading" class="message-loading">
+        이전 메시지를 불러오는 중입니다.
+      </div>
+
+      <div
+        v-for="message in visibleMessages"
+        :key="message.id"
+        class="message-row"
+        :class="message.role"
+      >
+        <template v-if="message.role === 'assistant'">
+          <img
+            class="bot-logo small"
+            :src="chatbotLogo"
+            alt="AI 어시스턴트 로고"
+          />
+
+          <div class="message-content">
+            <span v-if="message.tag" class="message-tag">
+              {{ message.tag }}
+            </span>
+
+            <div
+              class="assistant-bubble markdown-content"
+              :class="{ 'loading-answer': message.isLoading }"
+              v-html="message.isLoading ? message.text : renderMarkdown(message.text)"
+            ></div>
+
+            <time>{{ message.time }}</time>
           </div>
+        </template>
 
-          <div v-if="typing" class="typing-row">
-            <img
-              class="bot-logo small"
-              :src="chatbotLogo"
-              alt="AI 어시스턴트 로고"
-            />
-
-            <div class="typing-bubble">
-              <span></span>
-              <span></span>
-              <span></span>
+        <template v-else>
+          <div class="user-message-content">
+            <div class="user-bubble">
+              {{ message.text }}
             </div>
+            <time>{{ message.time }}</time>
           </div>
-        </section>
+        </template>
+      </div>
+    </section>
 
-        <section class="composer-area">
-          <div class="composer-box">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#9AA4BC"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path
-                d="M21.4 11.05l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"
-              />
-            </svg>
+    <section class="composer-area">
+      <div class="composer-box">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#9AA4BC"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.4 11.05l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"
+          />
+        </svg>
 
-            <input
-              v-model="draft"
-              type="text"
-              placeholder="무엇을 도와드릴까요?"
-              @keydown.enter.prevent="sendMessage()"
-            />
+        <input
+          ref="composerInputRef"
+          v-model="draft"
+          type="text"
+          :disabled="isAnswering"
+          :placeholder="isAnswering ? '답변 생성 중입니다. 잠시만 기다려 주세요.' : '채팅을 입력해 주세요.'"
+          @keydown.enter.prevent="sendMessage()"
+        />
 
-            <button type="button" @click="sendMessage()">
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#FFFFFF"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <path d="M22 2L15 22l-4-9-9-4 20-7z" />
-              </svg>
-            </button>
-          </div>
+        <button
+          type="button"
+          :disabled="isAnswering"
+          @click="sendMessage()"
+        >
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#FFFFFF"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <path d="M22 2L15 22l-4-9-9-4 20-7z" />
+          </svg>
+        </button>
+      </div>
 
-          <p>현재 채팅 메시지는 화면 세션에서만 표시되며, 메시지 저장은 Kafka/Redis 연동 후 적용됩니다.</p>
-        </section>
-      </main>
+      <p>AI가 생성한 답변은 참고용으로 활용해 주세요.</p>
+    </section>
+  </template>
+</main>
 
       <aside v-if="currentPanel" class="detail-panel">
         <div class="detail-header">
@@ -959,8 +1147,12 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="detail-footer">
-          <button type="button" @click="runPanelAction">
-            {{ currentPanel.actionLabel }}
+          <button
+            type="button"
+            :disabled="businessActionLoading"
+            @click="runPanelAction"
+          >
+            {{ businessActionLoading ? '처리 중...' : currentPanel.actionLabel }}
           </button>
         </div>
       </aside>
@@ -1595,15 +1787,168 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.welcome-area {
-  padding: 26px 28px 20px;
-  border-bottom: 1px solid var(--color-border-light);
+.chat-main.start-mode {
+  position: relative;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(27, 67, 150, 0.16), transparent 34%),
+    radial-gradient(circle at 90% 10%, rgba(18, 165, 222, 0.16), transparent 30%),
+    linear-gradient(180deg, #f7faff 0%, #ffffff 62%);
 }
 
-.welcome-top {
+.start-screen {
+  flex: 1;
+  min-height: 0;
+  padding: 52px 56px 44px;
   display: flex;
-  gap: 18px;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+}
+
+.start-hero {
+  margin-top: 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hero-logo {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 18px;
+  filter: drop-shadow(0 12px 24px rgba(23, 48, 110, 0.14));
+}
+
+.start-eyebrow {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-primary-light);
+  letter-spacing: -0.1px;
+}
+
+.start-hero h2 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 850;
+  line-height: 1.28;
+  letter-spacing: -0.8px;
+  color: var(--color-primary);
+}
+
+.start-description {
+  margin: 14px 0 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--color-muted);
+}
+
+.start-composer {
+  width: min(720px, 100%);
+  margin-top: 30px;
+  min-height: 76px;
+  border: 1px solid rgba(201, 210, 228, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 22px 55px rgba(23, 48, 110, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  padding: 14px 16px 14px 22px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.start-composer:focus-within {
+  border-color: var(--color-primary-light);
+  box-shadow:
+    0 26px 64px rgba(23, 48, 110, 0.18),
+    0 0 0 4px rgba(27, 67, 150, 0.07);
+}
+
+.start-composer input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 16px;
+}
+
+.start-composer input::placeholder {
+  color: #a2adbf;
+}
+
+.start-composer input:disabled {
+  cursor: not-allowed;
+  color: var(--color-muted);
+}
+
+.start-composer button {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 15px;
+  background: var(--color-primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.start-composer button:hover:not(:disabled) {
+  background: var(--color-primary);
+}
+
+.start-composer button:disabled {
+  background: #c9d2e4;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.start-chip-list {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.start-chip-list button {
+  border: 1px solid rgba(201, 210, 228, 0.75);
+  background: rgba(255, 255, 255, 0.74);
+  color: #4a5570;
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(23, 48, 110, 0.06);
+}
+
+.start-chip-list button:hover:not(:disabled) {
+  background: #f4f8ff;
+  border-color: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.start-chip-list button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.starter-section {
+  margin-top: 18px;
+}
+
+.starter-section-title {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--color-subtle);
 }
 
 .bot-logo {
@@ -1648,6 +1993,16 @@ onBeforeUnmount(() => {
   gap: 18px;
 }
 
+.message-loading {
+  align-self: center;
+  font-size: 12px;
+  color: var(--color-subtle);
+  background: var(--color-white);
+  border: 1px solid var(--color-border-light);
+  border-radius: 999px;
+  padding: 6px 12px;
+}
+
 .message-row {
   display: flex;
   flex-direction: column;
@@ -1690,7 +2045,180 @@ onBeforeUnmount(() => {
   font-size: 13.5px;
   line-height: 1.65;
   color: var(--color-text);
-  white-space: pre-line;
+  white-space: normal;
+}
+
+.assistant-bubble.loading-answer {
+  color: #8d98ad;
+  background:
+    linear-gradient(
+      90deg,
+      #ffffff 0%,
+      #f7faff 45%,
+      #eef5ff 55%,
+      #ffffff 100%
+    );
+  background-size: 220% 100%;
+  border-color: #dce6f5;
+  font-weight: 600;
+  animation:
+    assistantLoadingShimmer 1.8s ease-in-out infinite,
+    assistantLoadingPulse 1.4s ease-in-out infinite;
+}
+
+.assistant-bubble.loading-answer::after {
+  content: '...';
+  display: inline-block;
+  width: 0;
+  overflow: hidden;
+  vertical-align: bottom;
+  animation: assistantLoadingDots 1.2s steps(4, end) infinite;
+}
+
+.markdown-content {
+  white-space: normal;
+}
+
+.markdown-content :deep(p) {
+  margin: 0 0 10px;
+}
+
+.markdown-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.markdown-content :deep(strong) {
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.markdown-content :deep(em) {
+  font-style: italic;
+}
+
+.markdown-content :deep(ul),
+.markdown-content :deep(ol) {
+  margin: 8px 0 10px;
+  padding-left: 20px;
+}
+
+.markdown-content :deep(li) {
+  margin: 4px 0;
+}
+
+.markdown-content :deep(a) {
+  color: var(--color-primary-light);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  word-break: break-all;
+}
+
+.markdown-content :deep(code) {
+  background: #f2f5fa;
+  border: 1px solid #e4eaf4;
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 12.5px;
+  color: #d14;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.markdown-content :deep(pre) {
+  margin: 10px 0;
+  background: #172033;
+  color: #f7faff;
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.markdown-content :deep(pre code) {
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+.markdown-content :deep(blockquote) {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-left: 4px solid var(--color-primary-light);
+  background: #f6f9ff;
+  color: #4a5570;
+  border-radius: 8px;
+}
+
+.markdown-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--color-border-light);
+  margin: 14px 0;
+}
+
+.markdown-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 12.5px;
+}
+
+.markdown-content :deep(th),
+.markdown-content :deep(td) {
+  border: 1px solid #e4eaf4;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.markdown-content :deep(th) {
+  background: #f6f9ff;
+  font-weight: 800;
+}
+
+@keyframes assistantLoadingShimmer {
+  0% {
+    background-position: 120% 0;
+  }
+
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+@keyframes assistantLoadingPulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    box-shadow: 0 0 0 rgba(27, 67, 150, 0);
+  }
+
+  50% {
+    opacity: 1;
+    box-shadow: 0 6px 18px rgba(27, 67, 150, 0.08);
+  }
+}
+
+@keyframes assistantLoadingDots {
+  0% {
+    width: 0;
+  }
+
+  100% {
+    width: 1.2em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-bubble.loading-answer {
+    animation: none;
+  }
+
+  .assistant-bubble.loading-answer::after {
+    animation: none;
+    width: 1.2em;
+  }
 }
 
 .user-message-content {
@@ -1715,41 +2243,9 @@ onBeforeUnmount(() => {
   overflow-wrap: break-word;
 }
 
-.message-row time,
-.typing-row time {
+.message-row time {
   font-size: 11px;
   color: var(--color-placeholder);
-}
-
-.typing-row {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.typing-bubble {
-  background: var(--color-white);
-  border: 1px solid var(--color-border);
-  border-radius: 4px 16px 16px 16px;
-  padding: 13px 16px;
-  display: flex;
-  gap: 5px;
-}
-
-.typing-bubble span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--color-placeholder);
-  animation: tanetPulse 1.1s ease-in-out infinite;
-}
-
-.typing-bubble span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.typing-bubble span:nth-child(3) {
-  animation-delay: 0.4s;
 }
 
 .composer-area {
@@ -1771,6 +2267,11 @@ onBeforeUnmount(() => {
   border-color: var(--color-primary-light);
 }
 
+.composer-box:has(input:disabled) {
+  background: #f8fafd;
+  border-color: var(--color-border-light);
+}
+
 .composer-box input {
   flex: 1;
   min-width: 0;
@@ -1779,6 +2280,15 @@ onBeforeUnmount(() => {
   background: transparent;
   font-size: 14px;
   color: var(--color-text);
+}
+
+.composer-box input::placeholder {
+  color: #b5bfd0;
+}
+
+.composer-box input:disabled {
+  color: var(--color-muted);
+  cursor: not-allowed;
 }
 
 .composer-box button {
@@ -1791,10 +2301,39 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  opacity: 1;
 }
 
-.composer-box button:hover {
+.composer-box button:hover:not(:disabled) {
   background: var(--color-primary);
+}
+
+.composer-box button:disabled {
+  background: #c9d2e4;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.faq-list button:disabled {
+  background: #f3f6fb;
+  border-color: #e5ebf5;
+  color: #a2adbf;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.faq-list button:disabled:hover {
+  background: #f3f6fb;
+  border-color: #e5ebf5;
+  color: #a2adbf;
+}
+
+.detail-footer button:disabled {
+  background: #c9d2e4;
+  color: var(--color-white);
+  cursor: not-allowed;
+  opacity: 0.75;
 }
 
 .composer-area p {
@@ -1981,6 +2520,19 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1100px) {
+  .start-screen {
+    padding: 42px 34px 34px;
+  }
+
+  .start-hero h2 {
+    font-size: 28px;
+  }
+
+  .start-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-top: 36px;
+  }
+
   .app-header {
     padding: 0 18px;
   }
@@ -2021,6 +2573,54 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 820px) {
+  .start-screen {
+  padding: 32px 20px 26px;
+}
+
+.start-hero {
+  margin-top: 4px;
+}
+
+.hero-logo {
+  width: 54px;
+  height: 54px;
+}
+
+.start-hero h2 {
+  font-size: 23px;
+}
+
+.start-description br {
+  display: none;
+}
+
+.start-composer {
+  min-height: 64px;
+  border-radius: 19px;
+  padding: 10px 12px 10px 16px;
+}
+
+.start-composer input {
+  font-size: 14px;
+}
+
+  .start-composer button {
+    width: 40px;
+    height: 40px;
+    border-radius: 13px;
+  }
+
+  .start-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding-top: 26px;
+  }
+
+  .start-card {
+    min-height: 130px;
+    border-radius: 16px;
+    padding: 15px 14px;
+  }
   .chat-body {
     padding: 10px;
     gap: 10px;
