@@ -505,6 +505,17 @@ const sendMessage = async (text = draft.value) => {
   }
 }
 
+const handleComposerKeydown = (event) => {
+  if (event.key !== 'Enter') return
+
+  if (event.shiftKey) {
+    return
+  }
+
+  event.preventDefault()
+  sendMessage()
+}
+
 const createNewChat = async () => {
   if (chatStore.creating) return
 
@@ -1003,14 +1014,14 @@ onBeforeUnmount(() => {
           />
         </svg>
 
-        <input
+        <textarea
           ref="composerInputRef"
           v-model="draft"
-          type="text"
+          rows="1"
           :disabled="isAnswering"
           placeholder="업무 요청을 입력해 주세요."
-          @keydown.enter.prevent="sendMessage()"
-        />
+          @keydown="handleComposerKeydown"
+        ></textarea>
 
         <button
           type="button"
@@ -1109,14 +1120,14 @@ onBeforeUnmount(() => {
           />
         </svg>
 
-        <input
+        <textarea
           ref="composerInputRef"
           v-model="draft"
-          type="text"
+          rows="1"
           :disabled="isAnswering"
           :placeholder="isAnswering ? '답변 생성 중입니다. 잠시만 기다려 주세요.' : '채팅을 입력해 주세요.'"
-          @keydown.enter.prevent="sendMessage()"
-        />
+          @keydown="handleComposerKeydown"
+        ></textarea>
 
         <button
           type="button"
@@ -2302,26 +2313,31 @@ onBeforeUnmount(() => {
   border-color: var(--color-primary-light);
 }
 
-.composer-box:has(input:disabled) {
+.composer-box:has(textarea:disabled) {
   background: #f8fafd;
   border-color: var(--color-border-light);
 }
 
-.composer-box input {
+.composer-box textarea {
   flex: 1;
   min-width: 0;
+  max-height: 120px;
   border: none;
   outline: none;
   background: transparent;
   font-size: 14px;
   color: var(--color-text);
+  line-height: 1.5;
+  resize: none;
+  font-family: inherit;
+  overflow-y: auto;
 }
 
-.composer-box input::placeholder {
+.composer-box textarea::placeholder {
   color: #b5bfd0;
 }
 
-.composer-box input:disabled {
+.composer-box textarea:disabled {
   color: var(--color-muted);
   cursor: not-allowed;
 }

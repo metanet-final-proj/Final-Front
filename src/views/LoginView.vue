@@ -1,13 +1,56 @@
 <script setup>
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import LoginBrandPanel from '../components/login/LoginBrandPanel.vue'
 import LoginForm from '../components/login/LoginForm.vue'
+import { useAuthStore } from '../stores/authStore'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+const loginFormKey = ref(0)
+
+const hasAccessToken = () => {
+  const token = localStorage.getItem('accessToken')
+  return Boolean(token && token.replace(/^"|"$/g, '').trim())
+}
+
+const goToChatIfAuthenticated = () => {
+  if (authStore.isAuthenticated || hasAccessToken()) {
+    router.replace('/chat')
+    return true
+  }
+
+  return false
+}
+
+const resetLoginForm = async () => {
+  loginFormKey.value += 1
+  await nextTick()
+}
+
+const handlePageShow = async () => {
+  await resetLoginForm()
+  goToChatIfAuthenticated()
+}
+
+onMounted(() => {
+  resetLoginForm()
+  goToChatIfAuthenticated()
+
+  window.addEventListener('pageshow', handlePageShow)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pageshow', handlePageShow)
+})
 </script>
 
 <template>
   <main class="login-page page">
     <section class="login-card">
       <LoginBrandPanel />
-      <LoginForm />
+      <LoginForm :key="loginFormKey" />
     </section>
   </main>
 </template>
