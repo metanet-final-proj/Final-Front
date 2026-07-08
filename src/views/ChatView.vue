@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import chatbotLogo from '../assets/images/officelink-logo.svg'
+import chatbotLogo2 from '../assets/images/officelink-logo-nobg.svg'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import MarkdownIt from 'markdown-it'
@@ -1109,7 +1110,7 @@ onBeforeUnmount(() => {
       <div class="start-hero">
         <img
           class="bot-logo hero-logo"
-          :src="chatbotLogo"
+          :src="chatbotLogo2"
           alt="AI 어시스턴트 로고"
         />
 
@@ -1573,7 +1574,7 @@ onBeforeUnmount(() => {
   background: #f3f5fa;
   box-shadow:
     -100vw 0 0 100vw #f3f5fa,
-    inset -1px 0 0 rgba(0, 0, 0, 0.22);
+    inset -1px 0 0 rgba(255, 255, 255, 1);
   display: flex;
   flex-direction: column;
   gap: 16px;

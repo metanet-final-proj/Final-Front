@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import loginIcon from '../../assets/images/officelink-logo-title-wide.svg'
+import loginIcon from '../../assets/images/officelink-logo-title-wide-nobg.svg'
 
 const loading = ref(false)
 const error = ref('')
