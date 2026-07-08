@@ -38,6 +38,7 @@ const sidebarCollapsed = ref(false)
 const profileMenuOpen = ref(false)
 const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
+const composingNewChat = ref(false)
 
 const editingRoomId = ref(null)
 const editingTitle = ref('')
@@ -289,6 +290,8 @@ const activeRoomId = computed(() => chatStore.activeConversationId)
 const activeRoom = computed(() => chatStore.activeRoom)
 
 const activeMessages = computed(() => {
+  if (composingNewChat.value) return []
+
   return activeRoom.value?.messages || []
 })
 
@@ -350,7 +353,7 @@ const showWelcome = computed(() => {
     return false
   }
 
-  return visibleMessages.value.length === 0
+  return composingNewChat.value || visibleMessages.value.length === 0
 })
 
 const currentPanel = computed(() => {
@@ -467,6 +470,7 @@ const getRoomPreview = (room) => {
 }
 
 const selectRoom = async (roomId) => {
+  composingNewChat.value = false
   chatStore.setActiveConversation(roomId)
 
   try {
@@ -477,17 +481,12 @@ const selectRoom = async (roomId) => {
   }
 }
 
-const ensureActiveConversation = async () => {
-  if (activeRoomId.value) {
+const ensureActiveConversation = async (initialMessage = '') => {
+  if (activeRoomId.value && !composingNewChat.value) {
     return activeRoomId.value
   }
 
-  const conversation = await chatStore.createConversation({
-    title: '새 채팅',
-    chatType: 'GENERAL',
-  })
-
-  return conversation.conversationId
+  return createNewChat(initialMessage)
 }
 
 const sendMessage = async (text = draft.value) => {
@@ -498,11 +497,13 @@ const sendMessage = async (text = draft.value) => {
   let conversationId
 
   try {
-    conversationId = await ensureActiveConversation()
+    conversationId = await ensureActiveConversation(messageText)
   } catch (error) {
     console.error('Failed to create conversation before sending:', error)
     return
   }
+
+  if (!conversationId) return
 
   const currentRoomTitle = activeRoom.value?.title
 
@@ -540,15 +541,32 @@ const handleComposerKeydown = (event) => {
   sendMessage()
 }
 
-const createNewChat = async () => {
-  if (chatStore.creating) return
+const createNewChat = async (initialTitle = '') => {
+  const titleText = typeof initialTitle === 'string' ? initialTitle.trim() : ''
+
+  if (!titleText) {
+    composingNewChat.value = true
+    chatStore.setActiveConversation(null)
+    panelKey.value = null
+    draft.value = ''
+
+    await nextTick()
+
+    if (composerInputRef.value) {
+      composerInputRef.value.focus()
+    }
+
+    return null
+  }
+
+  if (chatStore.creating) return null
 
   try {
     const previousConversationId = activeRoomId.value
 
     const conversation = await chatStore.createConversation({
-      title: '새 채팅',
       chatType: 'GENERAL',
+      title: titleText.slice(0, 255),
     })
 
     await nextTick()
@@ -560,6 +578,7 @@ const createNewChat = async () => {
         : null)
 
     if (conversationId) {
+      composingNewChat.value = false
       chatStore.setActiveConversation(conversationId)
       resetMessagesForConversation(conversationId)
     } else {
@@ -576,8 +595,11 @@ const createNewChat = async () => {
     }
 
     await scrollThread()
+
+    return conversationId
   } catch (error) {
     console.error('Failed to create chat conversation:', error)
+    throw error
   }
 }
 
