@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
-import officeLinkTitle from '../assets/images/officelink-title.svg'
+import officeLinkTitle from '../assets/images/officelink-logo-title-wide-nobg.svg'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -42,6 +42,8 @@ const composingNewChat = ref(true)
 
 const editingRoomId = ref(null)
 const editingTitle = ref('')
+const roomActionMenuId = ref(null)
+const roomActionMenuPlacement = ref('up')
 const titleSaving = ref(false)
 const timeTick = ref(Date.now())
 
@@ -471,6 +473,7 @@ const getRoomPreview = (room) => {
 
 const selectRoom = async (roomId) => {
   composingNewChat.value = false
+  roomActionMenuId.value = null
   chatStore.setActiveConversation(roomId)
 
   try {
@@ -605,6 +608,7 @@ const createNewChat = async (initialTitle = '') => {
 
 const deleteChatRoom = async (roomId) => {
   if (!roomId || chatStore.deleting) return
+  roomActionMenuId.value = null
 
   const ok = window.confirm('이 채팅방을 삭제할까요?')
 
@@ -620,6 +624,7 @@ const deleteChatRoom = async (roomId) => {
 }
 
 const startEditRoomTitle = async (room) => {
+  roomActionMenuId.value = null
   chatStore.setActiveConversation(room.id)
 
   editingRoomId.value = room.id
@@ -638,6 +643,31 @@ const startEditRoomTitle = async (room) => {
 const cancelEditRoomTitle = () => {
   editingRoomId.value = null
   editingTitle.value = ''
+}
+
+const toggleRoomActionMenu = (roomId, event) => {
+  if (roomActionMenuId.value === roomId) {
+    roomActionMenuId.value = null
+    return
+  }
+
+  const trigger = event?.currentTarget
+  const list = trigger?.closest?.('.room-list')
+  const triggerRect = trigger?.getBoundingClientRect?.()
+  const listRect = list?.getBoundingClientRect?.()
+  const menuHeight = 98
+
+  if (triggerRect && listRect) {
+    const spaceAbove = triggerRect.top - listRect.top
+    const spaceBelow = listRect.bottom - triggerRect.bottom
+
+    roomActionMenuPlacement.value =
+      spaceAbove < menuHeight && spaceBelow > spaceAbove ? 'down' : 'up'
+  } else {
+    roomActionMenuPlacement.value = 'up'
+  }
+
+  roomActionMenuId.value = roomId
 }
 
 const saveEditRoomTitle = async (room) => {
@@ -907,18 +937,18 @@ onBeforeUnmount(() => {
 
           <section class="side-card">
             <div class="side-card-header">
-              <h2>채팅방 목록</h2>
+              <h2>채팅 목록</h2>
               <span>{{ roomCount }}개</span>
             </div>
 
             <div v-if="chatStore.loading" class="room-loading">
-              채팅방을 불러오는 중입니다.
+              채팅을 불러오는 중입니다.
             </div>
 
             <div v-else-if="rooms.length === 0" class="room-empty">
-              <p>아직 채팅방이 없습니다.</p>
+              <p>아직 채팅이 없습니다.</p>
               <button type="button" @click="createNewChat">
-                첫 채팅방 만들기
+                첫 채팅 시작하기
               </button>
             </div>
 
@@ -948,14 +978,11 @@ onBeforeUnmount(() => {
                     </template>
 
                     <template v-else>
-                      <button
-                        class="room-title-button"
-                        type="button"
-                        title="채팅방 이름 수정"
-                        @click.stop="startEditRoomTitle(room)"
+                      <span
+                        class="room-title-text"
                       >
                         {{ room.title }}
-                      </button>
+                      </span>
                     </template>
 
                     <span>{{ formatRelativeTime(room.createdAt) }}</span>
@@ -964,14 +991,81 @@ onBeforeUnmount(() => {
                   <p>{{ getRoomPreview(room) }}</p>
                 </div>
 
-                <button
-                  class="room-delete-button"
-                  type="button"
-                  aria-label="채팅방 삭제"
-                  @click.stop="deleteChatRoom(room.id)"
+                <div
+                  class="room-actions"
+                  @click.stop
                 >
-                  ×
-                </button>
+                  <button
+                    class="room-menu-button"
+                    type="button"
+                    aria-label="채팅방 메뉴 열기"
+                    :aria-expanded="roomActionMenuId === room.id"
+                    @click="toggleRoomActionMenu(room.id, $event)"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.4"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="5" r="1" />
+                      <circle cx="12" cy="12" r="1" />
+                      <circle cx="12" cy="19" r="1" />
+                    </svg>
+                  </button>
+
+                  <div
+                    v-if="roomActionMenuId === room.id"
+                    class="room-action-menu"
+                    :class="{ down: roomActionMenuPlacement === 'down' }"
+                  >
+                    <button
+                      class="room-action-item"
+                      type="button"
+                      @click="startEditRoomTitle(room)"
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                      <span>이름 변경</span>
+                    </button>
+
+                    <button
+                      class="room-action-item danger"
+                      type="button"
+                      @click="deleteChatRoom(room.id)"
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                      <span>삭제</span>
+                    </button>
+                  </div>
+                </div>
               </article>
             </div>
           </section>
@@ -1288,7 +1382,7 @@ onBeforeUnmount(() => {
 }
 
 .header-title-logo {
-  width: 180px;
+  width: 230px;
   height: auto;
   display: block;
 }
@@ -1697,24 +1791,87 @@ onBeforeUnmount(() => {
   border-radius: 11px;
 }
 
-.room-delete-button {
+.room-actions {
   position: absolute;
   top: 8px;
   right: 8px;
+  z-index: 5;
+}
+
+.room-menu-button {
   width: 22px;
   height: 22px;
   border: none;
   border-radius: 7px;
   background: transparent;
   color: var(--color-placeholder);
-  font-size: 16px;
-  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
 }
 
-.room-delete-button:hover {
+.room-item:hover .room-menu-button,
+.room-item:focus-within .room-menu-button,
+.room-menu-button[aria-expanded='true'] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.room-menu-button:hover,
+.room-menu-button[aria-expanded='true'] {
+  background: #eaf1ff;
+  color: var(--color-primary);
+}
+
+.room-action-menu {
+  position: absolute;
+  bottom: 28px;
+  right: 0;
+  min-width: 128px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 12px 28px rgba(23, 48, 110, 0.14);
+}
+
+.room-action-menu.down {
+  top: 28px;
+  bottom: auto;
+}
+
+.room-action-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #4a5570;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.room-action-item:hover {
+  background: #f6f9ff;
+  color: var(--color-primary);
+}
+
+.room-action-item.danger {
+  color: var(--color-danger);
+}
+
+.room-action-item.danger:hover {
   background: var(--color-danger-bg);
   color: var(--color-danger);
 }
@@ -1726,13 +1883,9 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.room-title-button {
+.room-title-text {
   flex: 1;
   min-width: 0;
-  border: none;
-  background: transparent;
-  padding: 0;
-  text-align: left;
   font-size: 13px;
   font-weight: 600;
   color: #4a5570;
@@ -1741,13 +1894,7 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 
-.room-title-button:hover {
-  color: var(--color-primary-light);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.room-item.active .room-title-button {
+.room-item.active .room-title-text {
   color: var(--color-primary);
   font-weight: 800;
 }

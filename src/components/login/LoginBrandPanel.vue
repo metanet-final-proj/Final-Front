@@ -1,5 +1,5 @@
 <script setup>
-import loginIcon from '../../assets/images/officelink-logo.svg'
+import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
 </script>
 
 <template>
