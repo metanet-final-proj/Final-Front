@@ -1078,7 +1078,7 @@ onBeforeUnmount(() => {
           </section>
 
           <section class="side-card faq-card">
-            <h2 class="faq-title">자주 묻는 업무</br></h2>
+            <h2 class="faq-title">자주 묻는 업무</h2>
 
             <div class="faq-list">
               <button
@@ -1951,8 +1951,8 @@ onBeforeUnmount(() => {
   padding: 16px 14px;
 }
 
-.faq-title {
-  margin: 0 0 16px 4px;
+.faq-card .faq-title {
+  margin: 0 0 12px 4px;
 }
 
 .faq-list {
