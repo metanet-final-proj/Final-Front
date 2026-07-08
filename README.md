@@ -64,26 +64,7 @@ npm ci
 
 일반 개발 환경에서는 `npm install`을 사용하면 됩니다.
 
-### 3. 환경 변수 파일 생성
-
-프로젝트에는 `.env.example` 파일이 포함되어 있습니다.  
-이를 복사해서 `.env` 파일을 생성합니다.
-
-#### Windows PowerShell
-
-```powershell
-Copy-Item .env.example .env
-```
-
-#### macOS / Linux / Git Bash
-
-```bash
-cp .env.example .env
-```
-
-현재는 Azure SSO 실제 연동 전 UI 개발 단계이므로, 로그인 버튼을 누르면 바로 채팅 페이지로 이동하도록 구현되어 있습니다.
-
-### 4. 개발 서버 실행
+### 3. 개발 서버 실행
 
 ```bash
 npm run dev
