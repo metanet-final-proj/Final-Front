@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import loginIcon from '../../assets/images/login-logo.svg'
+import loginIcon from '../../assets/images/officelink-logo-title-wide.svg'
 
 const loading = ref(false)
 const error = ref('')
@@ -28,9 +28,9 @@ const loginWithAzure = () => {
       <img
         class="logo-image"
         :src="loginIcon"
-        alt="METANET 로고"
+        alt="서비스 로고"
       />
-      <strong>METANET</strong>
+
     </div>
 
     <div class="login-content">
@@ -83,6 +83,13 @@ const loginWithAzure = () => {
   flex-direction: column;
 }
 
+<style scoped>
+.logo-text {
+  font-family: 'BBH Hegarty', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+}
+
 .logo-row {
   display: flex;
   align-items: center;
@@ -94,7 +101,7 @@ const loginWithAzure = () => {
 }
 
 .logo-image {
-  width: 38px;
+  width: 120px;
   height: 38px;
   object-fit: contain;
   display: block;

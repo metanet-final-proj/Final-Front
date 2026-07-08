@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
+import officeLinkTitle from '../assets/images/officelink-title.svg'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -725,8 +726,11 @@ onBeforeUnmount(() => {
     <header class="app-header">
       <div class="header-title-area">
         <div>
-          <h1>사내 업무지원 AI 어시스턴트</h1>
-          <p>주차 · 회의실 · 식당 · 사무용품 업무를 대화로 처리</p>
+          <img
+            class="header-title-logo"
+            :src="officeLinkTitle"
+            alt="Office Link"
+          />
         </div>
       </div>
 
@@ -1228,11 +1232,20 @@ onBeforeUnmount(() => {
 }
 
 .header-title-area h1 {
+  font-family: 'BBH Hegarty';
   margin: 0;
-  font-size: 17px;
+  font-size: 40px;
   font-weight: 800;
-  color: var(--color-primary);
   letter-spacing: -0.3px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.header-title-logo {
+  width: 180px;
+  height: auto;
+  display: block;
 }
 
 .header-title-area p {
