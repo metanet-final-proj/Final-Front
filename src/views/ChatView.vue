@@ -38,7 +38,7 @@ const sidebarCollapsed = ref(false)
 const profileMenuOpen = ref(false)
 const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
-const composingNewChat = ref(false)
+const composingNewChat = ref(true)
 
 const editingRoomId = ref(null)
 const editingTitle = ref('')
@@ -735,10 +735,8 @@ onMounted(async () => {
 
   try {
     await chatStore.fetchConversations()
-
-    if (activeRoomId.value) {
-      await chatStore.fetchMessages(activeRoomId.value)
-    }
+    composingNewChat.value = true
+    chatStore.setActiveConversation(null)
 
     await scrollThread()
   } catch (error) {
@@ -997,7 +995,7 @@ onBeforeUnmount(() => {
           </section>
 
           <section class="side-card faq-card">
-            <h2 class="faq-title">자주 묻는 업무</h2>
+            <h2 class="faq-title">자주 묻는 업무</br></h2>
 
             <div class="faq-list">
               <button
