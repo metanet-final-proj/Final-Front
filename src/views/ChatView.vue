@@ -1371,7 +1371,7 @@ onBeforeUnmount(() => {
 }
 
 .header-title-logo {
-  width: 230px;
+  width: 160px;
   height: auto;
   display: block;
 }
@@ -1753,7 +1753,7 @@ onBeforeUnmount(() => {
 
 .room-item {
   width: 100%;
-  min-height: 52px;
+  min-height: 58px;
   border: 1px solid transparent;
   background: transparent;
   border-radius: 11px;
@@ -1776,14 +1776,14 @@ onBeforeUnmount(() => {
 .room-select-body {
   flex: 1;
   min-width: 0;
-  padding: 9px 34px 9px 12px;
+  padding: 23px 8px 8px 12px;
   border-radius: 11px;
 }
 
 .room-actions {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 4px;
+  right: 6px;
   z-index: 5;
 }
 
@@ -1866,9 +1866,9 @@ onBeforeUnmount(() => {
 }
 
 .room-top {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 
@@ -1907,9 +1907,11 @@ onBeforeUnmount(() => {
 }
 
 .room-time {
-  flex-shrink: 0;
+  justify-self: end;
   font-size: 11px;
+  line-height: 1;
   color: var(--color-placeholder);
+  text-align: right;
 }
 
 .shortcut-card {
