@@ -1157,8 +1157,10 @@ onBeforeUnmount(() => {
           type="button"
           :disabled="isAnswering"
           @click="sendMessage()"
+          class="send-button"
         >
           <svg
+            class="send-icon"
             width="18"
             height="18"
             viewBox="0 0 24 24"
@@ -2920,6 +2922,22 @@ onBeforeUnmount(() => {
   border-radius: 19px;
   padding: 10px 12px 10px 16px;
   grid-template-columns: 24px minmax(0, 1fr) 40px;
+}
+
+.send-button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-icon {
+  display: block;
+  transform: translate(-2px, 1px);
 }
 
 .start-composer textarea {
