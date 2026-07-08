@@ -222,6 +222,42 @@ const panels = {
   },
 }
 
+const redirectToLogin = async () => {
+  if (typeof authStore.clearAuth === 'function') {
+    authStore.clearAuth()
+  }
+
+  router.replace({
+    path: '/login',
+    query: {
+      redirect: router.currentRoute.value.fullPath,
+    },
+  })
+}
+
+const ensureUserContext = async () => {
+  try {
+    if (
+      authStore.isAuthenticated &&
+      typeof authStore.fetchUserContext === 'function' &&
+      (!authStore.user || !authStore.employeeProfile)
+    ) {
+      await authStore.fetchUserContext()
+    }
+
+    if (!authStore.user || !authStore.employeeProfile) {
+      await redirectToLogin()
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.warn('사용자 인증 정보 조회 실패:', error)
+    await redirectToLogin()
+    return false
+  }
+}
+
 const rooms = computed(() => chatStore.rooms)
 
 const activeRoomId = computed(() => chatStore.activeConversationId)
@@ -636,15 +672,9 @@ watch(
 )
 
 onMounted(async () => {
-  if (
-    authStore.isAuthenticated &&
-    typeof authStore.fetchUserContext === 'function' &&
-    (!authStore.user || !authStore.employeeProfile)
-  ) {
-    authStore.fetchUserContext().catch((error) => {
-      console.warn('Failed to fetch user context:', error)
-    })
-  }
+  const hasUserContext = await ensureUserContext()
+
+  if (!hasUserContext) return
 
   try {
     await chatStore.fetchConversations()
@@ -656,6 +686,11 @@ onMounted(async () => {
     await scrollThread()
   } catch (error) {
     console.error('Failed to fetch chat data:', error)
+
+    if (error.response?.status === 401 || error.status === 401) {
+      await redirectToLogin()
+      return
+    }
   }
 
   timeTimer = window.setInterval(() => {
