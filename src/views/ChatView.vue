@@ -788,16 +788,6 @@ onBeforeUnmount(() => {
 <template>
   <div class="chat-shell page">
     <header class="app-header">
-      <div class="header-title-area">
-        <div>
-          <img
-            class="header-title-logo"
-            :src="officeLinkTitle"
-            alt="Office Link"
-          />
-        </div>
-      </div>
-
       <div class="header-actions">
         <div class="system-badge">
           <span></span>
@@ -898,31 +888,39 @@ onBeforeUnmount(() => {
 
         <template v-else>
           <div class="sidebar-top">
+            <div class="sidebar-brand-row">
+              <img
+                class="sidebar-title-logo"
+                :src="officeLinkTitle"
+                alt="Office Link"
+              />
+
+              <button
+                class="sidebar-toggle-button"
+                type="button"
+                aria-label="사이드바 접기"
+                @click="toggleSidebar"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#4A5570"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <line x1="9" y1="4" x2="9" y2="20" />
+                  <path d="M16 9l-3 3 3 3" />
+                </svg>
+              </button>
+            </div>
+
             <button class="new-chat-button" type="button" @click="createNewChat">
               <span>＋</span>
               {{ chatStore.creating ? '생성 중...' : '새 대화 시작' }}
-            </button>
-
-            <button
-              class="sidebar-toggle-button"
-              type="button"
-              aria-label="사이드바 접기"
-              @click="toggleSidebar"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#4A5570"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <rect x="3" y="4" width="18" height="16" rx="2" />
-                <line x1="9" y1="4" x2="9" y2="20" />
-                <path d="M16 9l-3 3 3 3" />
-              </svg>
             </button>
           </div>
 
@@ -1351,6 +1349,8 @@ onBeforeUnmount(() => {
   height: 68px;
   min-width: 0;
   flex-shrink: 0;
+  position: relative;
+  z-index: 5;
   background: var(--color-white);
   border-bottom: 1px solid var(--color-border);
   display: flex;
@@ -1370,7 +1370,8 @@ onBeforeUnmount(() => {
   align-items: baseline;
 }
 
-.header-title-logo {
+.header-title-logo,
+.sidebar-title-logo {
   width: 160px;
   height: auto;
   display: block;
@@ -1565,6 +1566,14 @@ onBeforeUnmount(() => {
 .sidebar {
   width: 312px;
   flex-shrink: 0;
+  height: calc(100% + 68px);
+  margin-top: -68px;
+  position: relative;
+  z-index: 10;
+  background: #f3f5fa;
+  box-shadow:
+    -100vw 0 0 100vw #f3f5fa,
+    inset -1px 0 0 rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1584,8 +1593,8 @@ onBeforeUnmount(() => {
 
 .collapsed-sidebar {
   width: 100%;
-  background: var(--color-white);
-  border: 1px solid var(--color-border);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: var(--radius-lg);
   padding: 10px 8px;
   display: flex;
@@ -1595,16 +1604,35 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+.sidebar.collapsed .collapsed-sidebar {
+  transform: translateX(-6px);
+}
+
 .sidebar-top {
   width: 100%;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
   flex-shrink: 0;
 }
 
+.sidebar-brand-row {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sidebar-title-logo {
+  flex-shrink: 0;
+}
+
 .new-chat-button {
-  flex: 1;
+  width: 100%;
+  flex: none;
   min-width: 0;
   height: 48px;
   border: none;
