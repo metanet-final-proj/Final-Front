@@ -462,15 +462,6 @@ const requestScrollThread = () => {
   })
 }
 
-const getRoomPreview = (room) => {
-  const messages = (room?.messages || []).filter(
-    (message) => !isDefaultAssistantPrompt(message),
-  )
-  const lastMessage = messages[messages.length - 1]
-
-  return lastMessage?.text ? lastMessage.text.split('\n')[0] : ''
-}
-
 const selectRoom = async (roomId) => {
   composingNewChat.value = false
   roomActionMenuId.value = null
@@ -985,10 +976,8 @@ onBeforeUnmount(() => {
                       </span>
                     </template>
 
-                    <span>{{ formatRelativeTime(room.createdAt) }}</span>
+                    <span class="room-time">{{ formatRelativeTime(room.createdAt) }}</span>
                   </div>
-
-                  <p>{{ getRoomPreview(room) }}</p>
                 </div>
 
                 <div
@@ -1764,13 +1753,13 @@ onBeforeUnmount(() => {
 
 .room-item {
   width: 100%;
-  min-height: 74px;
+  min-height: 52px;
   border: 1px solid transparent;
   background: transparent;
   border-radius: 11px;
   flex-shrink: 0;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   position: relative;
   cursor: pointer;
 }
@@ -1787,7 +1776,7 @@ onBeforeUnmount(() => {
 .room-select-body {
   flex: 1;
   min-width: 0;
-  padding: 11px 34px 11px 12px;
+  padding: 9px 34px 9px 12px;
   border-radius: 11px;
 }
 
@@ -1887,8 +1876,8 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   font-size: 13px;
-  font-weight: 600;
-  color: #4a5570;
+  font-weight: 700;
+  color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1917,19 +1906,10 @@ onBeforeUnmount(() => {
   opacity: 0.65;
 }
 
-.room-top span {
+.room-time {
   flex-shrink: 0;
   font-size: 11px;
   color: var(--color-placeholder);
-}
-
-.room-item p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--color-subtle);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .shortcut-card {
