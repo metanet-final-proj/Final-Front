@@ -1,11 +1,13 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import chatbotLogo from '../assets/images/chatbot-logo.svg'
+import chatbotLogo from '../assets/images/officelink-logo.svg'
+import chatbotLogo2 from '../assets/images/officelink-logo-nobg.svg'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
+import officeLinkTitle from '../assets/images/officelink-logo-title-wide-nobg.svg'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -37,13 +39,39 @@ const sidebarCollapsed = ref(false)
 const profileMenuOpen = ref(false)
 const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
+const composingNewChat = ref(true)
 
 const editingRoomId = ref(null)
 const editingTitle = ref('')
+const roomActionMenuId = ref(null)
+const roomActionMenuPlacement = ref('up')
 const titleSaving = ref(false)
 const timeTick = ref(Date.now())
 
 let timeTimer = null
+
+const resizeComposer = async () => {
+  await nextTick()
+
+  const textarea = composerInputRef.value
+  if (!textarea) return
+
+  const maxHeight = 80
+
+  textarea.style.height = 'auto'
+  textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+}
+
+watch(
+  draft,
+  () => {
+    resizeComposer()
+  },
+  {
+    flush: 'post',
+  },
+)
 
 const shortcuts = [
   {
@@ -265,6 +293,8 @@ const activeRoomId = computed(() => chatStore.activeConversationId)
 const activeRoom = computed(() => chatStore.activeRoom)
 
 const activeMessages = computed(() => {
+  if (composingNewChat.value) return []
+
   return activeRoom.value?.messages || []
 })
 
@@ -326,7 +356,7 @@ const showWelcome = computed(() => {
     return false
   }
 
-  return visibleMessages.value.length === 0
+  return composingNewChat.value || visibleMessages.value.length === 0
 })
 
 const currentPanel = computed(() => {
@@ -433,16 +463,9 @@ const requestScrollThread = () => {
   })
 }
 
-const getRoomPreview = (room) => {
-  const messages = (room?.messages || []).filter(
-    (message) => !isDefaultAssistantPrompt(message),
-  )
-  const lastMessage = messages[messages.length - 1]
-
-  return lastMessage?.text ? lastMessage.text.split('\n')[0] : ''
-}
-
 const selectRoom = async (roomId) => {
+  composingNewChat.value = false
+  roomActionMenuId.value = null
   chatStore.setActiveConversation(roomId)
 
   try {
@@ -453,17 +476,12 @@ const selectRoom = async (roomId) => {
   }
 }
 
-const ensureActiveConversation = async () => {
-  if (activeRoomId.value) {
+const ensureActiveConversation = async (initialMessage = '') => {
+  if (activeRoomId.value && !composingNewChat.value) {
     return activeRoomId.value
   }
 
-  const conversation = await chatStore.createConversation({
-    title: '새 채팅',
-    chatType: 'GENERAL',
-  })
-
-  return conversation.conversationId
+  return createNewChat(initialMessage)
 }
 
 const sendMessage = async (text = draft.value) => {
@@ -474,11 +492,13 @@ const sendMessage = async (text = draft.value) => {
   let conversationId
 
   try {
-    conversationId = await ensureActiveConversation()
+    conversationId = await ensureActiveConversation(messageText)
   } catch (error) {
     console.error('Failed to create conversation before sending:', error)
     return
   }
+
+  if (!conversationId) return
 
   const currentRoomTitle = activeRoom.value?.title
 
@@ -516,15 +536,32 @@ const handleComposerKeydown = (event) => {
   sendMessage()
 }
 
-const createNewChat = async () => {
-  if (chatStore.creating) return
+const createNewChat = async (initialTitle = '') => {
+  const titleText = typeof initialTitle === 'string' ? initialTitle.trim() : ''
+
+  if (!titleText) {
+    composingNewChat.value = true
+    chatStore.setActiveConversation(null)
+    panelKey.value = null
+    draft.value = ''
+
+    await nextTick()
+
+    if (composerInputRef.value) {
+      composerInputRef.value.focus()
+    }
+
+    return null
+  }
+
+  if (chatStore.creating) return null
 
   try {
     const previousConversationId = activeRoomId.value
 
     const conversation = await chatStore.createConversation({
-      title: '새 채팅',
       chatType: 'GENERAL',
+      title: titleText.slice(0, 255),
     })
 
     await nextTick()
@@ -536,6 +573,7 @@ const createNewChat = async () => {
         : null)
 
     if (conversationId) {
+      composingNewChat.value = false
       chatStore.setActiveConversation(conversationId)
       resetMessagesForConversation(conversationId)
     } else {
@@ -552,13 +590,17 @@ const createNewChat = async () => {
     }
 
     await scrollThread()
+
+    return conversationId
   } catch (error) {
     console.error('Failed to create chat conversation:', error)
+    throw error
   }
 }
 
 const deleteChatRoom = async (roomId) => {
   if (!roomId || chatStore.deleting) return
+  roomActionMenuId.value = null
 
   const ok = window.confirm('이 채팅방을 삭제할까요?')
 
@@ -574,6 +616,7 @@ const deleteChatRoom = async (roomId) => {
 }
 
 const startEditRoomTitle = async (room) => {
+  roomActionMenuId.value = null
   chatStore.setActiveConversation(room.id)
 
   editingRoomId.value = room.id
@@ -592,6 +635,31 @@ const startEditRoomTitle = async (room) => {
 const cancelEditRoomTitle = () => {
   editingRoomId.value = null
   editingTitle.value = ''
+}
+
+const toggleRoomActionMenu = (roomId, event) => {
+  if (roomActionMenuId.value === roomId) {
+    roomActionMenuId.value = null
+    return
+  }
+
+  const trigger = event?.currentTarget
+  const list = trigger?.closest?.('.room-list')
+  const triggerRect = trigger?.getBoundingClientRect?.()
+  const listRect = list?.getBoundingClientRect?.()
+  const menuHeight = 98
+
+  if (triggerRect && listRect) {
+    const spaceAbove = triggerRect.top - listRect.top
+    const spaceBelow = listRect.bottom - triggerRect.bottom
+
+    roomActionMenuPlacement.value =
+      spaceAbove < menuHeight && spaceBelow > spaceAbove ? 'down' : 'up'
+  } else {
+    roomActionMenuPlacement.value = 'up'
+  }
+
+  roomActionMenuId.value = roomId
 }
 
 const saveEditRoomTitle = async (room) => {
@@ -689,10 +757,8 @@ onMounted(async () => {
 
   try {
     await chatStore.fetchConversations()
-
-    if (activeRoomId.value) {
-      await chatStore.fetchMessages(activeRoomId.value)
-    }
+    composingNewChat.value = true
+    chatStore.setActiveConversation(null)
 
     await scrollThread()
   } catch (error) {
@@ -723,13 +789,6 @@ onBeforeUnmount(() => {
 <template>
   <div class="chat-shell page">
     <header class="app-header">
-      <div class="header-title-area">
-        <div>
-          <h1>사내 업무지원 AI 어시스턴트</h1>
-          <p>주차 · 회의실 · 식당 · 사무용품 업무를 대화로 처리</p>
-        </div>
-      </div>
-
       <div class="header-actions">
         <div class="system-badge">
           <span></span>
@@ -830,48 +889,56 @@ onBeforeUnmount(() => {
 
         <template v-else>
           <div class="sidebar-top">
+            <div class="sidebar-brand-row">
+              <img
+                class="sidebar-title-logo"
+                :src="officeLinkTitle"
+                alt="Office Link"
+              />
+
+              <button
+                class="sidebar-toggle-button"
+                type="button"
+                aria-label="사이드바 접기"
+                @click="toggleSidebar"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#4A5570"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <rect x="3" y="4" width="18" height="16" rx="2" />
+                  <line x1="9" y1="4" x2="9" y2="20" />
+                  <path d="M16 9l-3 3 3 3" />
+                </svg>
+              </button>
+            </div>
+
             <button class="new-chat-button" type="button" @click="createNewChat">
               <span>＋</span>
               {{ chatStore.creating ? '생성 중...' : '새 대화 시작' }}
-            </button>
-
-            <button
-              class="sidebar-toggle-button"
-              type="button"
-              aria-label="사이드바 접기"
-              @click="toggleSidebar"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#4A5570"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <rect x="3" y="4" width="18" height="16" rx="2" />
-                <line x1="9" y1="4" x2="9" y2="20" />
-                <path d="M16 9l-3 3 3 3" />
-              </svg>
             </button>
           </div>
 
           <section class="side-card">
             <div class="side-card-header">
-              <h2>채팅방 목록</h2>
+              <h2>채팅 목록</h2>
               <span>{{ roomCount }}개</span>
             </div>
 
             <div v-if="chatStore.loading" class="room-loading">
-              채팅방을 불러오는 중입니다.
+              채팅을 불러오는 중입니다.
             </div>
 
             <div v-else-if="rooms.length === 0" class="room-empty">
-              <p>아직 채팅방이 없습니다.</p>
+              <p>아직 채팅이 없습니다.</p>
               <button type="button" @click="createNewChat">
-                첫 채팅방 만들기
+                첫 채팅 시작하기
               </button>
             </div>
 
@@ -901,30 +968,92 @@ onBeforeUnmount(() => {
                     </template>
 
                     <template v-else>
-                      <button
-                        class="room-title-button"
-                        type="button"
-                        title="채팅방 이름 수정"
-                        @click.stop="startEditRoomTitle(room)"
+                      <span
+                        class="room-title-text"
                       >
                         {{ room.title }}
-                      </button>
+                      </span>
                     </template>
 
-                    <span>{{ formatRelativeTime(room.createdAt) }}</span>
+                    <span class="room-time">{{ formatRelativeTime(room.createdAt) }}</span>
                   </div>
-
-                  <p>{{ getRoomPreview(room) }}</p>
                 </div>
 
-                <button
-                  class="room-delete-button"
-                  type="button"
-                  aria-label="채팅방 삭제"
-                  @click.stop="deleteChatRoom(room.id)"
+                <div
+                  class="room-actions"
+                  @click.stop
                 >
-                  ×
-                </button>
+                  <button
+                    class="room-menu-button"
+                    type="button"
+                    aria-label="채팅방 메뉴 열기"
+                    :aria-expanded="roomActionMenuId === room.id"
+                    @click="toggleRoomActionMenu(room.id, $event)"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.4"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="5" r="1" />
+                      <circle cx="12" cy="12" r="1" />
+                      <circle cx="12" cy="19" r="1" />
+                    </svg>
+                  </button>
+
+                  <div
+                    v-if="roomActionMenuId === room.id"
+                    class="room-action-menu"
+                    :class="{ down: roomActionMenuPlacement === 'down' }"
+                  >
+                    <button
+                      class="room-action-item"
+                      type="button"
+                      @click="startEditRoomTitle(room)"
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+                      </svg>
+                      <span>이름 변경</span>
+                    </button>
+
+                    <button
+                      class="room-action-item danger"
+                      type="button"
+                      @click="deleteChatRoom(room.id)"
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                      <span>삭제</span>
+                    </button>
+                  </div>
+                </div>
               </article>
             </div>
           </section>
@@ -981,7 +1110,7 @@ onBeforeUnmount(() => {
       <div class="start-hero">
         <img
           class="bot-logo hero-logo"
-          :src="chatbotLogo"
+          :src="chatbotLogo2"
           alt="AI 어시스턴트 로고"
         />
 
@@ -1020,6 +1149,7 @@ onBeforeUnmount(() => {
           rows="1"
           :disabled="isAnswering"
           placeholder="업무 요청을 입력해 주세요."
+          @input="resizeComposer"
           @keydown="handleComposerKeydown"
         ></textarea>
 
@@ -1027,8 +1157,10 @@ onBeforeUnmount(() => {
           type="button"
           :disabled="isAnswering"
           @click="sendMessage()"
+          class="send-button"
         >
           <svg
+            class="send-icon"
             width="18"
             height="18"
             viewBox="0 0 24 24"
@@ -1126,6 +1258,7 @@ onBeforeUnmount(() => {
           rows="1"
           :disabled="isAnswering"
           :placeholder="isAnswering ? '답변 생성 중입니다. 잠시만 기다려 주세요.' : '채팅을 입력해 주세요.'"
+          @input="resizeComposer"
           @keydown="handleComposerKeydown"
         ></textarea>
 
@@ -1219,6 +1352,8 @@ onBeforeUnmount(() => {
   height: 68px;
   min-width: 0;
   flex-shrink: 0;
+  position: relative;
+  z-index: 5;
   background: var(--color-white);
   border-bottom: 1px solid var(--color-border);
   display: flex;
@@ -1228,11 +1363,21 @@ onBeforeUnmount(() => {
 }
 
 .header-title-area h1 {
+  font-family: 'BBH Hegarty';
   margin: 0;
-  font-size: 17px;
+  font-size: 40px;
   font-weight: 800;
-  color: var(--color-primary);
   letter-spacing: -0.3px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.header-title-logo,
+.sidebar-title-logo {
+  width: 160px;
+  height: auto;
+  display: block;
 }
 
 .header-title-area p {
@@ -1424,6 +1569,14 @@ onBeforeUnmount(() => {
 .sidebar {
   width: 312px;
   flex-shrink: 0;
+  height: calc(100% + 68px);
+  margin-top: -68px;
+  position: relative;
+  z-index: 10;
+  background: #f3f5fa;
+  box-shadow:
+    -100vw 0 0 100vw #f3f5fa,
+    inset -1px 0 0 rgba(255, 255, 255, 1);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1443,8 +1596,8 @@ onBeforeUnmount(() => {
 
 .collapsed-sidebar {
   width: 100%;
-  background: var(--color-white);
-  border: 1px solid var(--color-border);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: var(--radius-lg);
   padding: 10px 8px;
   display: flex;
@@ -1454,16 +1607,35 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+.sidebar.collapsed .collapsed-sidebar {
+  transform: translateX(-6px);
+}
+
 .sidebar-top {
   width: 100%;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
   flex-shrink: 0;
 }
 
+.sidebar-brand-row {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sidebar-title-logo {
+  flex-shrink: 0;
+}
+
 .new-chat-button {
-  flex: 1;
+  width: 100%;
+  flex: none;
   min-width: 0;
   height: 48px;
   border: none;
@@ -1612,13 +1784,13 @@ onBeforeUnmount(() => {
 
 .room-item {
   width: 100%;
-  min-height: 74px;
+  min-height: 58px;
   border: 1px solid transparent;
   background: transparent;
   border-radius: 11px;
   flex-shrink: 0;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   position: relative;
   cursor: pointer;
 }
@@ -1635,61 +1807,114 @@ onBeforeUnmount(() => {
 .room-select-body {
   flex: 1;
   min-width: 0;
-  padding: 11px 34px 11px 12px;
+  padding: 23px 8px 8px 12px;
   border-radius: 11px;
 }
 
-.room-delete-button {
+.room-actions {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 4px;
+  right: 6px;
+  z-index: 5;
+}
+
+.room-menu-button {
   width: 22px;
   height: 22px;
   border: none;
   border-radius: 7px;
   background: transparent;
   color: var(--color-placeholder);
-  font-size: 16px;
-  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
 }
 
-.room-delete-button:hover {
+.room-item:hover .room-menu-button,
+.room-item:focus-within .room-menu-button,
+.room-menu-button[aria-expanded='true'] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.room-menu-button:hover,
+.room-menu-button[aria-expanded='true'] {
+  background: #eaf1ff;
+  color: var(--color-primary);
+}
+
+.room-action-menu {
+  position: absolute;
+  bottom: 28px;
+  right: 0;
+  min-width: 128px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 12px 28px rgba(23, 48, 110, 0.14);
+}
+
+.room-action-menu.down {
+  top: 28px;
+  bottom: auto;
+}
+
+.room-action-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 9px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #4a5570;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.room-action-item:hover {
+  background: #f6f9ff;
+  color: var(--color-primary);
+}
+
+.room-action-item.danger {
+  color: var(--color-danger);
+}
+
+.room-action-item.danger:hover {
   background: var(--color-danger-bg);
   color: var(--color-danger);
 }
 
 .room-top {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 
-.room-title-button {
+.room-title-text {
   flex: 1;
   min-width: 0;
-  border: none;
-  background: transparent;
-  padding: 0;
-  text-align: left;
   font-size: 13px;
-  font-weight: 600;
-  color: #4a5570;
+  font-weight: 700;
+  color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.room-title-button:hover {
-  color: var(--color-primary-light);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.room-item.active .room-title-button {
+.room-item.active .room-title-text {
   color: var(--color-primary);
   font-weight: 800;
 }
@@ -1712,19 +1937,12 @@ onBeforeUnmount(() => {
   opacity: 0.65;
 }
 
-.room-top span {
-  flex-shrink: 0;
+.room-time {
+  justify-self: end;
   font-size: 11px;
+  line-height: 1;
   color: var(--color-placeholder);
-}
-
-.room-item p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--color-subtle);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-align: right;
 }
 
 .shortcut-card {
@@ -1766,8 +1984,8 @@ onBeforeUnmount(() => {
   padding: 16px 14px;
 }
 
-.faq-title {
-  margin: 0 0 16px 4px;
+.faq-card .faq-title {
+  margin: 0 0 12px 4px;
 }
 
 .faq-list {
@@ -1902,9 +2120,11 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(12px);
   border-radius: 24px;
   padding: 14px 16px 14px 22px;
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 46px;
+  align-items: start;
   gap: 14px;
+  overflow: hidden;
 }
 
 .start-composer:focus-within {
@@ -1914,21 +2134,46 @@ onBeforeUnmount(() => {
     0 0 0 4px rgba(27, 67, 150, 0.07);
 }
 
-.start-composer input {
-  flex: 1;
+.start-composer textarea {
+  width: 100%;
   min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  max-height: 80px;
   border: none;
   outline: none;
+  box-shadow: none;
   background: transparent;
   color: var(--color-text);
   font-size: 16px;
+  line-height: 20px;
+  padding: 6px 0 14px;
+  resize: none;
+  overflow-y: auto;
+  box-sizing: border-box;
+  font-family: inherit;
+  appearance: none;
+  align-self: start;
 }
 
-.start-composer input::placeholder {
+.start-composer > svg {
+  justify-self: start;
+  align-self: end;
+  margin-bottom: 13px;
+  flex-shrink: 0;
+}
+
+.start-composer textarea:focus {
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
+.start-composer textarea::placeholder {
   color: #a2adbf;
 }
 
-.start-composer input:disabled {
+.start-composer textarea:disabled {
   cursor: not-allowed;
   color: var(--color-muted);
 }
@@ -1944,6 +2189,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  justify-self: end;
+  align-self: end;
 }
 
 .start-composer button:hover:not(:disabled) {
@@ -2301,12 +2548,50 @@ onBeforeUnmount(() => {
 }
 
 .composer-box {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 40px;
+  align-items: start;
   gap: 12px;
   border: 1.5px solid var(--color-border);
   border-radius: 14px;
   padding: 8px 8px 8px 16px;
+  min-height: 58px;
+  overflow: hidden;
+}
+
+.composer-box > svg {
+  justify-self: start;
+  align-self: end;
+  margin-bottom: 11px;
+  flex-shrink: 0;
+}
+
+.composer-box textarea {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  max-height: 80px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 20px;
+  padding: 6px 0 14px;
+  resize: none;
+  overflow-y: auto;
+  box-sizing: border-box;
+  font-family: inherit;
+  appearance: none;
+  box-shadow: none;
+  align-self: start;
+}
+
+.composer-box textarea:focus {
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 .composer-box:focus-within {
@@ -2316,21 +2601,6 @@ onBeforeUnmount(() => {
 .composer-box:has(textarea:disabled) {
   background: #f8fafd;
   border-color: var(--color-border-light);
-}
-
-.composer-box textarea {
-  flex: 1;
-  min-width: 0;
-  max-height: 120px;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 14px;
-  color: var(--color-text);
-  line-height: 1.5;
-  resize: none;
-  font-family: inherit;
-  overflow-y: auto;
 }
 
 .composer-box textarea::placeholder {
@@ -2354,6 +2624,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   cursor: pointer;
   opacity: 1;
+  justify-self: end;
+  align-self: end;
 }
 
 .composer-box button:hover:not(:disabled) {
@@ -2649,9 +2921,26 @@ onBeforeUnmount(() => {
   min-height: 64px;
   border-radius: 19px;
   padding: 10px 12px 10px 16px;
+  grid-template-columns: 24px minmax(0, 1fr) 40px;
 }
 
-.start-composer input {
+.send-button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-icon {
+  display: block;
+  transform: translate(-2px, 1px);
+}
+
+.start-composer textarea {
   font-size: 14px;
 }
 
