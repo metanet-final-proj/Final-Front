@@ -484,6 +484,7 @@ export const useChatStore = defineStore('chat', {
       }
 
       let hasReceivedFirstChunk = false
+      let hasReceivedAssistantMessage = false
 
       this.appendLocalMessage(conversationId, localUserMessage)
       this.appendLocalMessage(conversationId, localAssistantMessage)
@@ -521,6 +522,7 @@ export const useChatStore = defineStore('chat', {
           },
 
           onAssistantMessage: (data) => {
+            hasReceivedAssistantMessage = true
             this.replaceLocalMessage(
               conversationId,
               localAssistantMessageId,
@@ -532,6 +534,14 @@ export const useChatStore = defineStore('chat', {
             console.error('SSE error event:', data)
           },
         })
+
+        if (!hasReceivedFirstChunk && !hasReceivedAssistantMessage) {
+          this.patchLocalMessage(conversationId, localAssistantMessageId, {
+            text: ASSISTANT_FAILURE_TEXT,
+            content: ASSISTANT_FAILURE_TEXT,
+            isLoading: false,
+          })
+        }
 
         await this.fetchConversations()
 
