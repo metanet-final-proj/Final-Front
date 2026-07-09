@@ -13,6 +13,24 @@ const nowTime = () => {
 
 const ASSISTANT_LOADING_TEXT = '답변을 생성하고 있어요'
 
+const STAGE_LABELS = {
+  planning: '요청을 분석하고 있어요...',
+  generating: '답변을 작성하고 있어요...',
+}
+
+const getStatusText = (parsed) => {
+  if (parsed.event === 'status') {
+    return STAGE_LABELS[parsed.data?.stage] || null
+  }
+
+  if (parsed.event === 'tool_start') {
+    const name = parsed.data?.name || '도구'
+    return `${name} 실행 중...`
+  }
+
+  return null
+}
+
 const formatKoreanTime = (value) => {
   if (!value) return nowTime()
 
@@ -530,6 +548,18 @@ export const useChatStore = defineStore('chat', {
           onError: (data) => {
             console.error('SSE error event:', data)
           },
+
+          onEvent: (parsed) => {
+            if (hasReceivedFirstChunk) return
+
+            const statusText = getStatusText(parsed)
+            if (!statusText) return
+
+            this.patchLocalMessage(conversationId, localAssistantMessageId, {
+              text: statusText,
+              content: statusText,
+            })
+          },      
         })
 
         await this.fetchConversations()
