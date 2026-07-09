@@ -9,6 +9,7 @@ import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import officeLinkTitle from '../assets/images/officelink-logo-title-wide-nobg.svg'
 import { useWorkhubStore } from '../stores/workhubStore'
+import { speechApi } from '../api/speechApi'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -42,6 +43,11 @@ const profileMenuOpen = ref(false)
 const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
 const composingNewChat = ref(true)
+const isRecording = ref(false)
+const isTranscribing = ref(false)
+const isVoiceSupported = typeof window !== 'undefined' &&
+  Boolean(navigator.mediaDevices?.getUserMedia) &&
+  typeof window.MediaRecorder !== 'undefined'
 
 const editingRoomId = ref(null)
 const editingTitle = ref('')
@@ -51,6 +57,10 @@ const titleSaving = ref(false)
 const timeTick = ref(Date.now())
 
 let timeTimer = null
+let mediaRecorder = null
+let mediaStream = null
+let audioChunks = []
+let recordingTimer = null
 
 const resizeComposer = async () => {
   await nextTick()
@@ -295,6 +305,10 @@ const isAnswering = computed(() => {
   return chatStore.sending
 })
 
+const isVoiceBusy = computed(() => {
+  return isRecording.value || isTranscribing.value
+})
+
 const nowTime = () => {
   const date = new Date()
   const hour = date.getHours()
@@ -353,6 +367,120 @@ const fillDraftFromStarter = async (query) => {
   }
 }
 
+const cleanupVoiceRecording = () => {
+  if (recordingTimer) {
+    window.clearTimeout(recordingTimer)
+    recordingTimer = null
+  }
+
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop())
+    mediaStream = null
+  }
+
+  mediaRecorder = null
+  audioChunks = []
+  isRecording.value = false
+}
+
+const preferredAudioMimeType = () => {
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+  ]
+
+  return candidates.find((type) => window.MediaRecorder?.isTypeSupported?.(type)) || ''
+}
+
+const applyTranscribedText = async (text) => {
+  const nextText = String(text || '').trim()
+  if (!nextText) return
+
+  draft.value = draft.value.trim()
+    ? `${draft.value.trim()} ${nextText}`
+    : nextText
+
+  await nextTick()
+  await resizeComposer()
+
+  if (composerInputRef.value) {
+    composerInputRef.value.focus()
+  }
+}
+
+const transcribeRecordedAudio = async (blob) => {
+  if (!blob || blob.size === 0) return
+
+  isTranscribing.value = true
+
+  try {
+    await authStore.ensureFreshAccessToken()
+    const response = await speechApi.transcribeAudio(blob)
+    await applyTranscribedText(response.data?.text)
+  } catch (error) {
+    console.error('Voice transcription failed:', error)
+    if (error.response?.status === 401 || error.status === 401) {
+      await redirectToLogin()
+      return
+    }
+    window.alert('음성을 텍스트로 변환하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+  } finally {
+    isTranscribing.value = false
+  }
+}
+
+const stopVoiceRecording = () => {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return
+  mediaRecorder.stop()
+}
+
+const startVoiceRecording = async () => {
+  if (!isVoiceSupported || isAnswering.value || isTranscribing.value) return
+
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    audioChunks = []
+
+    const mimeType = preferredAudioMimeType()
+    mediaRecorder = new MediaRecorder(
+      mediaStream,
+      mimeType ? { mimeType } : undefined,
+    )
+
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data?.size > 0) {
+        audioChunks.push(event.data)
+      }
+    }
+
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(audioChunks, {
+        type: mediaRecorder?.mimeType || 'audio/webm',
+      })
+      cleanupVoiceRecording()
+      transcribeRecordedAudio(blob)
+    }
+
+    mediaRecorder.start()
+    isRecording.value = true
+    recordingTimer = window.setTimeout(stopVoiceRecording, 60 * 1000)
+  } catch (error) {
+    console.error('Voice recording failed:', error)
+    cleanupVoiceRecording()
+    window.alert('마이크를 사용할 수 없습니다. 브라우저 권한을 확인해 주세요.')
+  }
+}
+
+const toggleVoiceRecording = () => {
+  if (isRecording.value) {
+    stopVoiceRecording()
+    return
+  }
+
+  startVoiceRecording()
+}
+
 let scrollAnimationFrameId = null
 
 const requestScrollThread = () => {
@@ -388,7 +516,7 @@ const ensureActiveConversation = async (initialMessage = '') => {
 const sendMessage = async (text = draft.value) => {
   const messageText = text.trim()
 
-  if (!messageText || isAnswering.value) return
+  if (!messageText || isAnswering.value || isTranscribing.value) return
 
   let conversationId
 
@@ -690,6 +818,13 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.onstop = null
+    mediaRecorder.stop()
+  }
+
+  cleanupVoiceRecording()
+
   if (timeTimer) {
     window.clearInterval(timeTimer)
   }
@@ -1043,34 +1178,43 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="start-composer">
-        <svg
-          width="19"
-          height="19"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#9AA4BC"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+        <button
+          type="button"
+          class="voice-button"
+          :class="{ recording: isRecording, transcribing: isTranscribing }"
+          :disabled="isAnswering || isTranscribing || !isVoiceSupported"
+          :title="isRecording ? '녹음 중지' : '음성으로 입력'"
+          @click="toggleVoiceRecording"
         >
-          <path
-            d="M21.4 11.05l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"
-          />
-        </svg>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <path d="M12 19v3" />
+          </svg>
+        </button>
 
         <textarea
           ref="composerInputRef"
           v-model="draft"
           rows="1"
-          :disabled="isAnswering"
-          placeholder="업무 요청을 입력해 주세요."
+          :disabled="isAnswering || isTranscribing"
+          :placeholder="isTranscribing ? '음성을 텍스트로 변환하는 중입니다.' : '업무 요청을 입력해 주세요.'"
           @input="resizeComposer"
           @keydown="handleComposerKeydown"
         ></textarea>
 
         <button
           type="button"
-          :disabled="isAnswering"
+          :disabled="isAnswering || isTranscribing"
           @click="sendMessage()"
           class="send-button"
         >
@@ -1152,34 +1296,43 @@ onBeforeUnmount(() => {
 
     <section class="composer-area">
       <div class="composer-box">
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#9AA4BC"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+        <button
+          type="button"
+          class="voice-button"
+          :class="{ recording: isRecording, transcribing: isTranscribing }"
+          :disabled="isAnswering || isTranscribing || !isVoiceSupported"
+          :title="isRecording ? '녹음 중지' : '음성으로 입력'"
+          @click="toggleVoiceRecording"
         >
-          <path
-            d="M21.4 11.05l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"
-          />
-        </svg>
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <path d="M12 19v3" />
+          </svg>
+        </button>
 
         <textarea
           ref="composerInputRef"
           v-model="draft"
           rows="1"
-          :disabled="isAnswering"
-          :placeholder="isAnswering ? '답변 생성 중입니다. 잠시만 기다려 주세요.' : '채팅을 입력해 주세요.'"
+          :disabled="isAnswering || isTranscribing"
+          :placeholder="isTranscribing ? '음성을 텍스트로 변환하는 중입니다.' : isAnswering ? '답변 생성 중입니다. 잠시만 기다려 주세요.' : '채팅을 입력해 주세요.'"
           @input="resizeComposer"
           @keydown="handleComposerKeydown"
         ></textarea>
 
         <button
           type="button"
-          :disabled="isAnswering"
+          :disabled="isAnswering || isTranscribing"
           @click="sendMessage()"
         >
           <svg
@@ -2047,7 +2200,7 @@ onBeforeUnmount(() => {
   border-radius: 24px;
   padding: 14px 16px 14px 22px;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 46px;
+  grid-template-columns: 46px minmax(0, 1fr) 46px;
   align-items: start;
   gap: 14px;
   overflow: hidden;
@@ -2082,10 +2235,9 @@ onBeforeUnmount(() => {
   align-self: start;
 }
 
-.start-composer > svg {
+.start-composer > .voice-button {
   justify-self: start;
   align-self: end;
-  margin-bottom: 13px;
   flex-shrink: 0;
 }
 
@@ -2127,6 +2279,34 @@ onBeforeUnmount(() => {
   background: #c9d2e4;
   cursor: not-allowed;
   opacity: 0.75;
+}
+
+.start-composer .voice-button,
+.composer-box .voice-button {
+  background: #f3f6fb;
+  color: #6b7690;
+  border: 1px solid #e1e7f2;
+}
+
+.start-composer .voice-button:hover:not(:disabled),
+.composer-box .voice-button:hover:not(:disabled) {
+  background: #eaf2ff;
+  color: var(--color-primary-light);
+  border-color: #c9d9f3;
+}
+
+.start-composer .voice-button.recording,
+.composer-box .voice-button.recording {
+  background: #fff1f1;
+  color: #d64545;
+  border-color: #f2c6c6;
+  animation: voiceRecordingPulse 1.2s ease-in-out infinite;
+}
+
+.start-composer .voice-button.transcribing,
+.composer-box .voice-button.transcribing {
+  background: #eef5ff;
+  color: var(--color-primary-light);
 }
 
 .start-chip-list {
@@ -2475,7 +2655,7 @@ onBeforeUnmount(() => {
 
 .composer-box {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 40px;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
   align-items: start;
   gap: 12px;
   border: 1.5px solid var(--color-border);
@@ -2485,10 +2665,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.composer-box > svg {
+.composer-box > .voice-button {
   justify-self: start;
   align-self: end;
-  margin-bottom: 11px;
   flex-shrink: 0;
 }
 
@@ -2562,6 +2741,17 @@ onBeforeUnmount(() => {
   background: #c9d2e4;
   cursor: not-allowed;
   opacity: 0.75;
+}
+
+@keyframes voiceRecordingPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(214, 69, 69, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 0 5px rgba(214, 69, 69, 0.08);
+  }
 }
 
 .faq-list button:disabled {
@@ -2899,7 +3089,7 @@ onBeforeUnmount(() => {
   min-height: 64px;
   border-radius: 19px;
   padding: 10px 12px 10px 16px;
-  grid-template-columns: 24px minmax(0, 1fr) 40px;
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
 }
 
 .send-button {
