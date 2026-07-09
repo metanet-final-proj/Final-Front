@@ -21,7 +21,11 @@ const STAGE_LABELS = {
 
 const getStatusText = (parsed) => {
   if (parsed.event === 'status') {
-    return STAGE_LABELS[parsed.data?.stage] || null
+    return parsed.data?.message || STAGE_LABELS[parsed.data?.stage] || null
+  }
+
+  if (parsed.event === 'progress') {
+    return parsed.data?.message || STAGE_LABELS[parsed.data?.stage] || null
   }
 
   if (parsed.event === 'tool_start') {
