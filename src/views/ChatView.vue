@@ -8,10 +8,12 @@ import { useChatStore } from '../stores/chatStore'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import officeLinkTitle from '../assets/images/officelink-logo-title-wide-nobg.svg'
+import { useWorkhubStore } from '../stores/workhubStore'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
+const workhubStore = useWorkhubStore()
 
 const markdown = new MarkdownIt({
   html: false,
@@ -73,39 +75,6 @@ watch(
   },
 )
 
-const shortcuts = [
-  {
-    key: 'meetings',
-    label: '오늘 회의 일정',
-    value: '2건',
-    tone: 'blue',
-  },
-  {
-    key: 'reservations',
-    label: '회의실 예약 현황',
-    value: '1건',
-    tone: 'blue',
-  },
-  {
-    key: 'parking',
-    label: '내 주차 등록 현황',
-    value: '0건',
-    tone: 'blue',
-  },
-  {
-    key: 'menu',
-    label: '구내식당 메뉴',
-    value: '오늘 돈까스',
-    tone: 'orange',
-  },
-  {
-    key: 'supplies',
-    label: '비품 신청 현황',
-    value: '1건',
-    tone: 'blue',
-  },
-]
-
 const faqs = [
   {
     label: '회의실 예약 및 변경/취소 방법 ›',
@@ -158,97 +127,29 @@ const starterCards = [
   },
 ]
 
-const panels = {
-  meetings: {
-    title: '오늘 회의 일정',
-    badge: '2건',
-    actionLabel: '회의실 예약하기',
-    actionQuery: '회의실 예약하고 싶어',
-    items: [
-      {
-        title: '주간 업무 회의',
-        desc: '10:00 – 11:00 · 중회의실2 (8석)',
-        meta: '참석 6명 · 주최 박성호 팀장',
-        badge: '완료',
-        tone: 'gray',
-      },
-      {
-        title: '신규 프로젝트 킥오프',
-        desc: '15:00 – 16:00 · 대회의실 (20석)',
-        meta: '참석 12명 · 주최 이수진 부장',
-        badge: '예정',
-        tone: 'blue',
-      },
-    ],
-  },
-  reservations: {
-    title: '회의실 예약 현황',
-    badge: '1건',
-    actionLabel: '새 회의실 예약',
-    actionQuery: '회의실 예약하고 싶어',
-    items: [
-      {
-        title: '회의실 A (12석)',
-        desc: '7월 3일(금) 14:00 – 15:00',
-        meta: '예약자: 김지현 대리 · 경영지원팀',
-        badge: '확정',
-        tone: 'green',
-      },
-    ],
-  },
-  parking: {
-    title: '내 주차 등록 현황',
-    badge: '0건',
-    actionLabel: '방문객 주차 등록',
-    actionQuery: '방문객 주차 등록하고 싶어',
-    emptyText: '등록된 주차 내역이 없습니다.\n방문객 주차를 등록해 보세요.',
-    items: [],
-  },
-  menu: {
-    title: '구내식당 메뉴',
-    badge: '오늘',
-    actionLabel: '실시간 혼잡도 확인',
-    actionQuery: '구내식당 지금 혼잡해?',
-    items: [
-      {
-        title: '중식 A코스',
-        desc: '돈까스 · 된장찌개 · 잡곡밥 · 샐러드',
-        meta: '11:30 – 13:30',
-        badge: '혼잡도 보통',
-        tone: 'yellow',
-      },
-      {
-        title: '중식 B코스',
-        desc: '제육볶음 · 미역국 · 쌀밥 · 김치',
-        meta: '11:30 – 13:30',
-        badge: '혼잡도 여유',
-        tone: 'green',
-      },
-      {
-        title: '석식',
-        desc: '치킨마요덮밥 · 우동 · 단무지',
-        meta: '17:30 – 19:00',
-        badge: '준비 중',
-        tone: 'gray',
-      },
-    ],
-  },
-  supplies: {
-    title: '비품 신청 현황',
-    badge: '1건',
-    actionLabel: '비품 신청하기',
-    actionQuery: '비품 신청 방법 알려줘',
-    items: [
-      {
-        title: 'A4 용지 (2박스)',
-        desc: '신청일 7월 1일 · 경영지원팀 검토',
-        meta: '예상 수령일 7월 3일(금)',
-        badge: '결재 진행 중',
-        tone: 'yellow',
-      },
-    ],
-  },
+const shortcuts = computed(() => workhubStore.shortcuts)
+const panels = computed(() => workhubStore.panelsByKey)
+
+const parseMealMenus = (description = '') => {
+  const mealLabels = ['아침', '점심', '저녁']
+
+  return mealLabels.map((label, index) => {
+    const nextLabel = mealLabels[index + 1]
+    const pattern = nextLabel
+      ? new RegExp(`${label}:\\s*(.*?)\\s*/\\s*${nextLabel}:`)
+      : new RegExp(`${label}:\\s*(.*)$`)
+    const match = description.match(pattern)
+    const menu = match?.[1]?.trim() || '-'
+
+    return {
+      label,
+      menu,
+      empty: menu === '-',
+    }
+  })
 }
+
+const isMenuPanel = computed(() => currentPanel.value?.key === 'menu')
 
 const redirectToLogin = async () => {
   if (typeof authStore.clearAuth === 'function') {
@@ -361,7 +262,7 @@ const showWelcome = computed(() => {
 
 const currentPanel = computed(() => {
   if (!panelKey.value) return null
-  return panels[panelKey.value] || null
+  return panels.value[panelKey.value] || null
 })
 
 const roomCount = computed(() => rooms.value.length)
@@ -492,9 +393,13 @@ const sendMessage = async (text = draft.value) => {
   let conversationId
 
   try {
+    await authStore.ensureFreshAccessToken()
     conversationId = await ensureActiveConversation(messageText)
   } catch (error) {
     console.error('Failed to create conversation before sending:', error)
+    if (error.response?.status === 401 || error.status === 401) {
+      await redirectToLogin()
+    }
     return
   }
 
@@ -503,10 +408,13 @@ const sendMessage = async (text = draft.value) => {
   const currentRoomTitle = activeRoom.value?.title
 
   draft.value = ''
-  try {
-    await chatStore.sendMessage(conversationId, messageText)
+    try {
+      await chatStore.sendMessage(conversationId, messageText)
+      workhubStore.fetchSidebarSummary().catch((error) => {
+        console.error('Failed to refresh Workhub sidebar summary:', error)
+      })
 
-    if (
+      if (
       currentRoomTitle === '새 채팅' ||
       currentRoomTitle === '새 대화' ||
       !currentRoomTitle
@@ -520,6 +428,9 @@ const sendMessage = async (text = draft.value) => {
     await scrollThread()
   } catch (error) {
     console.error('Failed to send chat message:', error)
+    if (error.response?.status === 401 || error.status === 401) {
+      await redirectToLogin()
+    }
   } finally {
     await scrollThread()
   }
@@ -757,6 +668,9 @@ onMounted(async () => {
 
   try {
     await chatStore.fetchConversations()
+    workhubStore.fetchSidebarSummary().catch((error) => {
+      console.error('Failed to fetch Workhub sidebar summary:', error)
+    })
     composingNewChat.value = true
     chatStore.setActiveConversation(null)
 
@@ -1069,6 +983,7 @@ onBeforeUnmount(() => {
               :key="item.key"
               class="shortcut-item"
               type="button"
+              :disabled="item.disabled || workhubStore.loading"
               @click="togglePanel(item.key)"
             >
               <span>{{ item.label }}</span>
@@ -1300,8 +1215,8 @@ onBeforeUnmount(() => {
 
         <div class="detail-content">
           <article
-            v-for="item in currentPanel.items"
-            :key="item.title"
+            v-for="(item, index) in currentPanel.items"
+            :key="`${currentPanel.key}-${item.title}-${item.meta}-${index}`"
             class="panel-item"
           >
             <div class="panel-item-top">
@@ -1315,7 +1230,18 @@ onBeforeUnmount(() => {
               </span>
             </div>
 
-            <p>{{ item.desc }}</p>
+            <div v-if="isMenuPanel" class="meal-menu-list">
+              <div
+                v-for="meal in parseMealMenus(item.desc)"
+                :key="`${item.title}-${meal.label}`"
+                class="meal-menu-row"
+                :class="{ empty: meal.empty }"
+              >
+                <span class="meal-label">{{ meal.label }}</span>
+                <strong>{{ meal.menu }}</strong>
+              </div>
+            </div>
+            <p v-else>{{ item.desc }}</p>
             <small>{{ item.meta }}</small>
           </article>
 
@@ -2756,6 +2682,58 @@ onBeforeUnmount(() => {
   font-size: 12.5px;
   color: #4a5570;
   line-height: 1.55;
+}
+
+.meal-menu-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.meal-menu-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  border: 1px solid #e8edf6;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px 9px;
+}
+
+.meal-menu-row.empty {
+  background: #f3f5f9;
+}
+
+.meal-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  border-radius: 6px;
+  background: #fff4df;
+  color: #bc6c10;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.meal-menu-row strong {
+  min-width: 0;
+  color: #33405c;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.meal-menu-row.empty .meal-label {
+  background: #e9edf5;
+  color: #768198;
+}
+
+.meal-menu-row.empty strong {
+  color: #8a94a7;
+  font-weight: 600;
 }
 
 .panel-item small {

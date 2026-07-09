@@ -12,6 +12,7 @@ const nowTime = () => {
 }
 
 const ASSISTANT_LOADING_TEXT = '답변을 생성하고 있어요'
+const ASSISTANT_FAILURE_TEXT = '답변 생성에 실패했습니다. 잠시 후 다시 질문해 주세요.'
 
 const formatKoreanTime = (value) => {
   if (!value) return nowTime()
@@ -540,18 +541,10 @@ export const useChatStore = defineStore('chat', {
         console.error('Send message failed status:', error.status)
         console.error('Send message failed response:', error.responseText)
 
-        this.removeLocalMessage(conversationId, localAssistantMessageId)
-
-        this.appendLocalMessage(conversationId, {
-          id: `local-error-${Date.now()}`,
-          messageId: null,
-          conversationId,
-          role: 'assistant',
-          text: '메시지 전송 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
-          content: '메시지 전송 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
-          time: nowTime(),
-          createdAt: new Date().toISOString(),
-          isLocal: true,
+        this.patchLocalMessage(conversationId, localAssistantMessageId, {
+          text: ASSISTANT_FAILURE_TEXT,
+          content: ASSISTANT_FAILURE_TEXT,
+          isLoading: false,
         })
 
         throw error

@@ -5,10 +5,39 @@ import { employeeApi } from '../api/employeeApi'
 const ACCESS_TOKEN_KEY = 'accessToken'
 const REFRESH_TOKEN_KEY = 'refreshToken'
 const TOKEN_TYPE_KEY = 'tokenType'
+const TOKEN_REFRESH_THRESHOLD_MS = 60 * 1000
+
+let refreshPromise = null
 
 const normalizeToken = (token) => {
   if (!token) return ''
   return String(token).replace(/^"|"$/g, '').trim()
+}
+
+const decodeJwtPayload = (token) => {
+  const [, payload] = token.split('.')
+
+  if (!payload) return null
+
+  try {
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      '=',
+    )
+
+    return JSON.parse(window.atob(padded))
+  } catch {
+    return null
+  }
+}
+
+const getTokenExpiresAtMs = (token) => {
+  const payload = decodeJwtPayload(token)
+
+  if (!payload?.exp) return null
+
+  return Number(payload.exp) * 1000
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -133,6 +162,58 @@ export const useAuthStore = defineStore('auth', {
         user: this.user,
         employeeProfile: this.employeeProfile,
       }
+    },
+
+    isAccessTokenExpiringSoon(thresholdMs = TOKEN_REFRESH_THRESHOLD_MS) {
+      const expiresAtMs = getTokenExpiresAtMs(this.accessToken)
+
+      if (!expiresAtMs) {
+        return false
+      }
+
+      return expiresAtMs - Date.now() <= thresholdMs
+    },
+
+    async refreshAccessToken() {
+      if (refreshPromise) {
+        return refreshPromise
+      }
+
+      const refreshToken = this.refreshToken
+
+      if (!refreshToken) {
+        this.clearAuth()
+        throw new Error('Refresh token is missing')
+      }
+
+      refreshPromise = authApi.refresh(refreshToken)
+        .then((response) => {
+          this.setTokens(response.data)
+          return response.data
+        })
+        .catch((error) => {
+          this.clearAuth()
+          throw error
+        })
+        .finally(() => {
+          refreshPromise = null
+        })
+
+      return refreshPromise
+    },
+
+    async ensureFreshAccessToken(thresholdMs = TOKEN_REFRESH_THRESHOLD_MS) {
+      if (!this.accessToken) {
+        this.clearAuth()
+        throw new Error('Access token is missing')
+      }
+
+      if (!this.isAccessTokenExpiringSoon(thresholdMs)) {
+        return this.accessToken
+      }
+
+      await this.refreshAccessToken()
+      return this.accessToken
     },
 
     async logout() {
