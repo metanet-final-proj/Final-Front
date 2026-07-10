@@ -909,7 +909,14 @@ onBeforeUnmount(() => {
               aria-label="사이드바 펼치기"
               @click="toggleSidebar"
             >
+              <img
+                class="collapsed-sidebar-logo"
+                :src="chatbotLogo2"
+                alt=""
+                aria-hidden="true"
+              />
               <svg
+                class="collapsed-sidebar-icon"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -1636,13 +1643,13 @@ onBeforeUnmount(() => {
 .chat-body {
   flex: 1;
   min-width: 0;
-  max-width: 1720px;
+  max-width: none;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
   min-height: 0;
   display: flex;
   gap: 20px;
-  padding: 20px 24px;
+  padding: 20px 24px 20px 0;
 }
 
 .sidebar {
@@ -1668,9 +1675,10 @@ onBeforeUnmount(() => {
 }
 
 .sidebar.collapsed {
-  width: 56px;
+  width: 50px;
   padding-right: 0;
   overflow: hidden;
+  align-items: center;
 }
 
 .collapsed-sidebar {
@@ -1678,16 +1686,12 @@ onBeforeUnmount(() => {
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
-  padding: 10px 8px;
+  padding: 8px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
-}
-
-.sidebar.collapsed .collapsed-sidebar {
-  transform: translateX(-6px);
 }
 
 .sidebar-top {
@@ -1753,19 +1757,55 @@ onBeforeUnmount(() => {
 }
 
 .collapsed-sidebar .sidebar-toggle-button {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  position: relative;
+  overflow: hidden;
+}
+
+.collapsed-sidebar-logo,
+.collapsed-sidebar-icon {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.collapsed-sidebar-logo {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  opacity: 1;
+}
+
+.collapsed-sidebar-icon {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.92);
+}
+
+.collapsed-sidebar .sidebar-toggle-button:hover .collapsed-sidebar-logo,
+.collapsed-sidebar .sidebar-toggle-button:focus-visible .collapsed-sidebar-logo {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.92);
+}
+
+.collapsed-sidebar .sidebar-toggle-button:hover .collapsed-sidebar-icon,
+.collapsed-sidebar .sidebar-toggle-button:focus-visible .collapsed-sidebar-icon {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .collapsed-new-chat-button {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: var(--color-primary-light);
   color: var(--color-white);
-  border-radius: 12px;
-  font-size: 22px;
+  border-radius: 11px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1;
 }
@@ -3042,7 +3082,7 @@ onBeforeUnmount(() => {
   }
 
   .chat-body {
-    padding: 14px;
+    padding: 14px 14px 14px 0;
     gap: 14px;
   }
 
@@ -3130,7 +3170,7 @@ onBeforeUnmount(() => {
     padding: 15px 14px;
   }
   .chat-body {
-    padding: 10px;
+    padding: 10px 10px 10px 0;
     gap: 10px;
   }
 
