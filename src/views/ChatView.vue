@@ -39,6 +39,11 @@ const panelKey = ref(null)
 const threadRef = ref(null)
 const composerInputRef = ref(null)
 const sidebarCollapsed = ref(false)
+const sidebarSectionCollapsed = ref({
+  rooms: false,
+  shortcuts: true,
+  faqs: true,
+})
 const profileMenuOpen = ref(false)
 const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
@@ -760,6 +765,10 @@ const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
 
+const toggleSidebarSection = (section) => {
+  sidebarSectionCollapsed.value[section] = !sidebarSectionCollapsed.value[section]
+}
+
 const toggleProfileMenu = () => {
   profileMenuOpen.value = !profileMenuOpen.value
 }
@@ -924,29 +933,162 @@ onBeforeUnmount(() => {
             </div>
 
             <button class="new-chat-button" type="button" @click="createNewChat">
-              <span>＋</span>
+              <span class="side-row-icon side-row-plus">＋</span>
               {{ chatStore.creating ? '생성 중...' : '새 대화 시작' }}
             </button>
           </div>
 
-          <section class="side-card">
+          <section
+            class="side-card shortcut-card"
+            :class="{ collapsed: sidebarSectionCollapsed.shortcuts }"
+          >
             <div class="side-card-header">
-              <h2>채팅 목록</h2>
-              <span>{{ roomCount }}개</span>
+              <h2>
+                <span class="side-row-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M0 0h24v24H0z" fill="none" />
+                    <path fill="currentColor" d="m10.95 18l5.65-5.65l-1.45-1.45l-4.225 4.225l-2.1-2.1L7.4 14.45zM6 22q-.825 0-1.412-.587T4 20V4q0-.825.588-1.412T6 2h8l6 6v12q0 .825-.587 1.413T18 22zm7-13V4H6v16h12V9zM6 4v5zv16z" />
+                  </svg>
+                </span>
+                오늘의 업무 바로가기
+              </h2>
+              <button
+                class="side-section-toggle"
+                type="button"
+                :aria-expanded="!sidebarSectionCollapsed.shortcuts"
+                @click="toggleSidebarSection('shortcuts')"
+              >
+                <svg
+                  class="side-section-chevron"
+                  :class="{ collapsed: sidebarSectionCollapsed.shortcuts }"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
             </div>
 
-            <div v-if="chatStore.loading" class="room-loading">
+            <button
+              v-if="!sidebarSectionCollapsed.shortcuts"
+              v-for="item in shortcuts"
+              :key="item.key"
+              class="shortcut-item"
+              type="button"
+              :disabled="item.disabled || workhubStore.loading"
+              @click="togglePanel(item.key)"
+            >
+              <span>{{ item.label }}</span>
+              <strong :class="item.tone">{{ item.value }} ›</strong>
+            </button>
+          </section>
+
+          <section
+            class="side-card faq-card"
+            :class="{ collapsed: sidebarSectionCollapsed.faqs }"
+          >
+            <div class="side-card-header faq-card-header">
+              <h2 class="faq-title">
+                <span class="side-row-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M0 0h24v24H0z" fill="none" />
+                    <path fill="currentColor" d="M12 3C6.49 3 2 7.49 2 13v6c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-5c0-.55-.45-1-1-1H4c0-4.41 3.59-8 8-8s8 3.59 8 8h-2c-.55 0-1 .45-1 1v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-6c0-5.51-4.49-10-10-10" />
+                  </svg>
+                </span>
+                자주 묻는 업무
+              </h2>
+              <button
+                class="side-section-toggle"
+                type="button"
+                :aria-expanded="!sidebarSectionCollapsed.faqs"
+                @click="toggleSidebarSection('faqs')"
+              >
+                <svg
+                  class="side-section-chevron"
+                  :class="{ collapsed: sidebarSectionCollapsed.faqs }"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+            </div>
+
+            <div v-if="!sidebarSectionCollapsed.faqs" class="faq-list">
+              <button
+                v-for="faq in faqs"
+                :key="faq.label"
+                type="button"
+                :disabled="isAnswering"
+                @click="sendMessage(faq.query)"
+              >
+                {{ faq.label }}
+              </button>
+            </div>
+          </section>
+
+          <section
+            class="side-card room-card"
+            :class="{ collapsed: sidebarSectionCollapsed.rooms }"
+          >
+            <div class="side-card-header">
+              <h2>
+                <span class="side-row-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M0 0h24v24H0z" fill="none" />
+                    <path fill="currentColor" d="M4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20zm8-7L4 8v10h16V8zm0-2l8-5H4zM4 8V6v12z" />
+                  </svg>
+                </span>
+                채팅 목록
+              </h2>
+              <span class="room-count">{{ roomCount }}개</span>
+              <button
+                class="side-section-toggle"
+                type="button"
+                :aria-expanded="!sidebarSectionCollapsed.rooms"
+                @click="toggleSidebarSection('rooms')"
+              >
+                <svg
+                  class="side-section-chevron"
+                  :class="{ collapsed: sidebarSectionCollapsed.rooms }"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+            </div>
+
+            <div v-if="!sidebarSectionCollapsed.rooms && chatStore.loading" class="room-loading">
               채팅을 불러오는 중입니다.
             </div>
 
-            <div v-else-if="rooms.length === 0" class="room-empty">
+            <div v-else-if="!sidebarSectionCollapsed.rooms && rooms.length === 0" class="room-empty">
               <p>아직 채팅이 없습니다.</p>
               <button type="button" @click="createNewChat">
                 첫 채팅 시작하기
               </button>
             </div>
 
-            <div v-else class="room-list">
+            <div v-else-if="!sidebarSectionCollapsed.rooms" class="room-list">
               <article
                 v-for="room in rooms"
                 :key="room.id"
@@ -1059,41 +1201,6 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </article>
-            </div>
-          </section>
-
-          <section class="side-card shortcut-card">
-            <div class="side-card-header">
-              <h2>오늘의 업무 바로가기</h2>
-              <button type="button">편집</button>
-            </div>
-
-            <button
-              v-for="item in shortcuts"
-              :key="item.key"
-              class="shortcut-item"
-              type="button"
-              :disabled="item.disabled || workhubStore.loading"
-              @click="togglePanel(item.key)"
-            >
-              <span>{{ item.label }}</span>
-              <strong :class="item.tone">{{ item.value }} ›</strong>
-            </button>
-          </section>
-
-          <section class="side-card faq-card">
-            <h2 class="faq-title">자주 묻는 업무</h2>
-
-            <div class="faq-list">
-              <button
-                v-for="faq in faqs"
-                :key="faq.label"
-                type="button"
-                :disabled="isAnswering"
-                @click="sendMessage(faq.query)"
-              >
-                {{ faq.label }}
-              </button>
             </div>
           </section>
 
@@ -1697,6 +1804,7 @@ onBeforeUnmount(() => {
   transition:
     width 0.2s ease,
     padding 0.2s ease;
+  border-right: 1px solid var(--color-border);
 }
 
 .sidebar.collapsed {
@@ -1712,7 +1820,7 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 2px;
@@ -1744,7 +1852,7 @@ onBeforeUnmount(() => {
   align-items: stretch;
   gap: 10px;
   flex-shrink: 0;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 .sidebar-brand-row {
@@ -1761,21 +1869,22 @@ onBeforeUnmount(() => {
 }
 
 .new-chat-button {
-  width: 100%;
+  width: calc(100% - 28px);
   flex: none;
   min-width: 0;
-  height: 48px;
+  height: 40px;
+  margin: 0 14px;
   border: none;
-  background: var(--color-white-light);
-  color: var(--color-black);
+  background: transparent;
+  color: var(--color-text);
   font-size: 14px;
   font-weight: 700;
   border-radius: 10px;
-  padding: 0 16px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
-  justify-content: left;
-  gap: 9px;
+  justify-content: flex-start;
+  gap: 8px;
   white-space: nowrap;
 }
 
@@ -1861,7 +1970,7 @@ onBeforeUnmount(() => {
 .sidebar-profile-area {
   width: 100%;
   flex-shrink: 0;
-  background: #f3f5fa;
+  background: #fffff;
   border-top: 1px solid rgba(255, 255, 255, 0.9);
   padding: 10px 14px 8px 0;
   z-index: 2;
@@ -1923,7 +2032,7 @@ onBeforeUnmount(() => {
 .guide-card {
   flex-shrink: 0;
   background: var(--color-white);
-  border: 1px solid var(--color-border);
+  border: none;
   border-radius: var(--radius-lg);
 }
 
@@ -1931,26 +2040,129 @@ onBeforeUnmount(() => {
   padding: 14px;
 }
 
+.room-card {
+  margin-top: 14px;
+}
+
+.shortcut-card,
+.faq-card {
+  padding: 0 14px;
+}
+
+.shortcut-card:not(.collapsed),
+.faq-card:not(.collapsed) {
+  padding-bottom: 8px;
+}
+
 .side-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 0; 
+  min-height: 40px;
+  border-radius: 10px;
+  padding: 0 10px;
+  transition: background 0.15s ease;
+}
+
+.room-card .side-card-header,
+.shortcut-card:not(.collapsed) .side-card-header,
+.faq-card:not(.collapsed) .side-card-header {
   margin-bottom: 10px;
-  padding: 0 4px;
+}
+
+.side-card-header:hover {
+  background: var(--color-bg);
 }
 
 .side-card h2,
 .side-card-header h2,
 .guide-card h2 {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.side-card-header h2 {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
+}
+
+.side-row-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  line-height: 1;
+}
+
+.side-row-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.side-row-plus {
+  font-size: 14px;
   font-weight: 800;
-  color: var(--color-primary);
 }
 
 .side-card-header span {
   font-size: 12px;
   color: var(--color-subtle);
+}
+
+.side-card-header .room-count {
+  margin-left: 8px;
+}
+
+.side-card-header h2 .side-row-icon {
+  color: var(--color-text);
+}
+
+.side-section-toggle {
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--color-subtle);
+  border-radius: 7px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.35;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.side-card-header:hover .side-section-toggle,
+.side-section-toggle:focus-visible,
+.side-section-toggle[aria-expanded='true'] {
+  opacity: 1;
+}
+
+.side-section-toggle:hover {
+  background: var(--color-bg);
+  color: var(--color-primary);
+}
+
+.side-section-chevron {
+  transition: transform 0.16s ease;
+}
+
+.side-section-chevron.collapsed {
+  transform: rotate(-90deg);
 }
 
 .side-card-header button {
@@ -1984,7 +2196,7 @@ onBeforeUnmount(() => {
 }
 
 .room-list {
-  max-height: 326px;
+  max-height: 400px;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
@@ -2169,10 +2381,6 @@ onBeforeUnmount(() => {
   text-align: right;
 }
 
-.shortcut-card {
-  padding: 18px 18px 10px;
-}
-
 .shortcut-item {
   width: calc(100% + 16px);
   margin: 0 -8px;
@@ -2204,12 +2412,12 @@ onBeforeUnmount(() => {
   color: var(--color-orange);
 }
 
-.faq-card {
-  padding: 16px 14px;
+.faq-card .faq-title {
+  margin: 0;
 }
 
-.faq-card .faq-title {
-  margin: 0 0 12px 4px;
+.faq-card-header {
+  margin-bottom: 0;
 }
 
 .faq-list {
