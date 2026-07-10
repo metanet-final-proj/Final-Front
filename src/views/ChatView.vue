@@ -10,6 +10,7 @@ import DOMPurify from 'dompurify'
 import officeLinkTitle from '../assets/images/officelink-logo-title-wide-nobg.svg'
 import { useWorkhubStore } from '../stores/workhubStore'
 import { speechApi } from '../api/speechApi'
+import MyPagePanel from '../components/mypage/MyPagePanel.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -34,7 +35,13 @@ const renderMarkdown = (text) => {
   })
 }
 
+const MAIN_PANEL = {
+  CHAT: 'chat',
+  MYPAGE: 'mypage',
+}
+
 const draft = ref('')
+const mainPanel = ref(MAIN_PANEL.CHAT)
 const panelKey = ref(null)
 const threadRef = ref(null)
 const composerInputRef = ref(null)
@@ -498,6 +505,7 @@ const requestScrollThread = () => {
 }
 
 const selectRoom = async (roomId) => {
+  mainPanel.value = MAIN_PANEL.CHAT
   composingNewChat.value = false
   roomActionMenuId.value = null
   chatStore.setActiveConversation(roomId)
@@ -522,6 +530,7 @@ const sendMessage = async (text = draft.value) => {
   const messageText = text.trim()
 
   if (!messageText || isAnswering.value || isTranscribing.value) return
+  mainPanel.value = MAIN_PANEL.CHAT
 
   let conversationId
 
@@ -581,6 +590,7 @@ const handleComposerKeydown = (event) => {
 }
 
 const createNewChat = async (initialTitle = '') => {
+  mainPanel.value = MAIN_PANEL.CHAT
   const titleText = typeof initialTitle === 'string' ? initialTitle.trim() : ''
 
   if (!titleText) {
@@ -771,6 +781,13 @@ const toggleSidebarSection = (section) => {
 
 const toggleProfileMenu = () => {
   profileMenuOpen.value = !profileMenuOpen.value
+}
+
+const openMyPage = () => {
+  mainPanel.value = MAIN_PANEL.MYPAGE
+  profileMenuOpen.value = false
+  panelKey.value = null
+  roomActionMenuId.value = null
 }
 
 const handleLogout = async () => {
@@ -1278,6 +1295,7 @@ onBeforeUnmount(() => {
             <button
               class="mypage-button"
               type="button"
+              @click="openMyPage"
             >
               마이페이지
             </button>
@@ -1294,7 +1312,20 @@ onBeforeUnmount(() => {
         </div>
       </aside>
 
-      <main class="chat-main" :class="{ 'start-mode': showWelcome }">
+      <main
+        class="chat-main"
+        :class="{
+          'start-mode': mainPanel === MAIN_PANEL.CHAT && showWelcome,
+          'mypage-mode': mainPanel === MAIN_PANEL.MYPAGE,
+        }"
+      >
+  <MyPagePanel
+    v-if="mainPanel === MAIN_PANEL.MYPAGE"
+    :user="authStore.user"
+    :profile="authStore.employeeProfile"
+  />
+
+  <template v-else>
   <template v-if="showWelcome">
     <section class="start-screen">
       <div class="start-hero">
@@ -1493,6 +1524,7 @@ onBeforeUnmount(() => {
 
       <p>AI가 생성한 답변은 참고용으로 활용해 주세요.</p>
     </section>
+  </template>
   </template>
 </main>
 
@@ -1841,6 +1873,27 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: #c9d2e4 transparent;
+}
+
+.sidebar-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+  background: #c9d2e4;
+  border-radius: 999px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .sidebar.collapsed .sidebar-content {
@@ -2214,10 +2267,18 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 6px;
   padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #c9d2e4 transparent;
 }
 
 .room-list::-webkit-scrollbar {
   width: 6px;
+}
+
+.room-list::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .room-list::-webkit-scrollbar-thumb {
@@ -2512,6 +2573,10 @@ onBeforeUnmount(() => {
     radial-gradient(circle at 20% 0%, rgba(27, 67, 150, 0.16), transparent 34%),
     radial-gradient(circle at 90% 10%, rgba(18, 165, 222, 0.16), transparent 30%),
     linear-gradient(180deg, #f7faff 0%, #ffffff 62%);
+}
+
+.chat-main.mypage-mode {
+  background: transparent;
 }
 
 .start-screen {
