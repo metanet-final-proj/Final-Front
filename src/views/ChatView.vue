@@ -3,6 +3,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import chatbotLogo from '../assets/images/officelink-logo.svg'
 import chatbotLogo2 from '../assets/images/officelink-logo-nobg.svg'
+import loopIcon from '../assets/images/loop.svg'
+import loadingIcon from '../assets/images/loading.svg'
+import checkAllIcon from '../assets/images/check-all.svg'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import MarkdownIt from 'markdown-it'
@@ -233,6 +236,20 @@ const isDefaultAssistantPrompt = (message) => {
 const visibleMessages = computed(() => {
   return activeMessages.value.filter((message) => !isDefaultAssistantPrompt(message))
 })
+
+const toggleAgentActivity = (message) => {
+  const activity = message?.agentActivity
+  const conversationId = message?.conversationId || activeRoomId.value
+
+  if (!activity || !conversationId || !message?.id) return
+
+  chatStore.patchLocalMessage(conversationId, message.id, {
+    agentActivity: {
+      ...activity,
+      collapsed: !activity.collapsed,
+    },
+  })
+}
 
 const normalizeId = (value) => {
   if (value === null || value === undefined) return ''
@@ -1439,14 +1456,100 @@ onBeforeUnmount(() => {
             alt="AI 어시스턴트 로고"
           />
 
-          <div class="message-content">
+          <div
+            class="message-content"
+            :class="{ 'has-agent-activity': message.agentActivity }"
+          >
             <span v-if="message.tag" class="message-tag">
               {{ message.tag }}
             </span>
 
             <div
+              v-if="message.agentActivity && message.isLoading"
+              class="agent-status-bubble"
+              role="status"
+            >
+              <img class="agent-loop-icon" :src="loopIcon" alt="" />
+              <span>{{ message.agentActivity.currentText || message.text }}</span>
+            </div>
+
+            <div
+              v-if="message.agentActivity?.steps?.length"
+              class="agent-activity-card"
+              :class="{ collapsed: message.agentActivity.collapsed }"
+            >
+              <button
+                v-if="message.agentActivity.collapsed"
+                type="button"
+                class="agent-activity-summary"
+                :aria-expanded="false"
+                @click="toggleAgentActivity(message)"
+              >
+                <span>Show reasoning summary</span>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              <template v-else>
+                <button
+                  type="button"
+                  class="agent-activity-header"
+                  :aria-expanded="true"
+                  @click="toggleAgentActivity(message)"
+                >
+                  <span>작업 과정</span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="18 15 12 9 6 15" />
+                  </svg>
+                </button>
+
+                <div class="agent-step-list">
+                  <div
+                    v-for="step in message.agentActivity.steps"
+                    :key="step.id"
+                    class="agent-step"
+                    :class="step.status"
+                  >
+                    <img
+                      class="agent-step-icon"
+                      :class="{ running: step.status !== 'done' }"
+                      :src="step.status === 'done' ? checkAllIcon : loadingIcon"
+                      alt=""
+                    />
+                    <div class="agent-step-body">
+                      <p>{{ step.title }}</p>
+                      <span v-if="step.tool">{{ step.tool }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <div
+              v-if="!message.agentActivity || !message.isLoading"
               class="assistant-bubble markdown-content"
-              :class="{ 'loading-answer': message.isLoading }"
+              :class="{ 'loading-answer': message.isLoading && !message.agentActivity }"
               v-html="message.isLoading ? message.text : renderMarkdown(message.text)"
             ></div>
 
@@ -2869,6 +2972,10 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 
+.message-content.has-agent-activity {
+  width: min(620px, 100%);
+}
+
 .message-tag {
   align-self: flex-start;
   font-size: 11px;
@@ -2889,6 +2996,117 @@ onBeforeUnmount(() => {
   line-height: 1.65;
   color: var(--color-text);
   white-space: normal;
+}
+
+.agent-status-bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  background: #ece8e1;
+  border: 1px solid #ded8ce;
+  border-radius: 4px 14px 14px 14px;
+  padding: 9px 13px;
+  color: #3b3f4a;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.agent-loop-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+}
+
+.agent-activity-card {
+  width: 100%;
+  overflow: hidden;
+  background: #e7e2da;
+  border: 1px solid #ddd7ce;
+  border-radius: 6px;
+  color: #3b3f4a;
+}
+
+.agent-activity-summary,
+.agent-activity-header {
+  width: 100%;
+  min-height: 36px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 13px;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-activity-summary:hover,
+.agent-activity-header:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.agent-activity-summary:focus-visible,
+.agent-activity-header:focus-visible {
+  outline: 2px solid rgba(49, 96, 180, 0.24);
+  outline-offset: -2px;
+}
+
+.agent-activity-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+}
+
+.agent-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+
+.agent-step {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+}
+
+.agent-step-icon {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.agent-step-body {
+  min-width: 0;
+}
+
+.agent-step-body p {
+  margin: 0;
+  color: #383d48;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.agent-step-body span {
+  display: inline-flex;
+  margin-top: 5px;
+  max-width: 100%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  padding: 3px 8px;
+  color: #535966;
+  font-size: 11.5px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .assistant-bubble.loading-answer {
