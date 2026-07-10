@@ -905,7 +905,7 @@ onBeforeUnmount(() => {
             <div class="sidebar-brand-row">
               <img
                 class="sidebar-title-logo"
-                :src="officeLinkTitle"
+                :src="chatbotLogo"
                 alt="Office Link"
               />
 
@@ -1111,7 +1111,7 @@ onBeforeUnmount(() => {
                 v-for="room in rooms"
                 :key="room.id"
                 class="room-item"
-                :class="{ active: room.id === activeRoomId }"
+                :class="{ active: room.id === activeRoomId, 'menu-open': roomActionMenuId === room.id }"
                 @click="selectRoom(room.id)"
               >
                 <div class="room-select-body">
@@ -1594,7 +1594,7 @@ onBeforeUnmount(() => {
 
 .header-title-logo,
 .sidebar-title-logo {
-  width: 160px;
+  width: 50px;
   height: auto;
   display: block;
   transform: translateX(15px);
@@ -2251,6 +2251,10 @@ onBeforeUnmount(() => {
   background: var(--color-primary-soft);
 }
 
+.room-item.menu-open {
+  z-index: 20;
+}
+
 .room-select-body {
   flex: 1;
   min-width: 0;
@@ -2267,6 +2271,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.room-item.menu-open .room-actions {
+  z-index: 25;
 }
 
 .room-menu-button {
@@ -2304,6 +2312,7 @@ onBeforeUnmount(() => {
   position: absolute;
   bottom: 28px;
   right: 0;
+  z-index: 30;
   min-width: 128px;
   border: 1px solid var(--color-border);
   background: var(--color-white);
