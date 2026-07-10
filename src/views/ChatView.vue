@@ -1698,6 +1698,7 @@ onBeforeUnmount(() => {
 }
 
 .profile-summary {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -2055,7 +2056,7 @@ onBeforeUnmount(() => {
 
 .sidebar-profile-box:hover {
   background: #f6f9ff;
-  border-color: var(--color-primary-light);
+  border-color: var(--color-border);
 }
 
 .sidebar-profile-area.collapsed {
@@ -2466,13 +2467,13 @@ onBeforeUnmount(() => {
 }
 
 .shortcut-item {
-  width: calc(100% + 16px);
-  margin: 0 -8px;
+  width: calc(100% - 16px);
+  margin: 0 8px;
   border: none;
   border-bottom: 1px solid #f0f3f9;
   background: transparent;
   border-radius: 8px;
-  padding: 11px 8px;
+  padding: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2507,16 +2508,18 @@ onBeforeUnmount(() => {
 .faq-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
+  padding: 0 10px;
 }
 
 .faq-list button {
   width: fit-content;
+  max-width: 100%;
   text-align: left;
   border: 1px solid #e9edf6;
   background: #f8fafd;
   border-radius: 999px;
-  padding: 9px 14px;
+  padding: 8px 12px;
   font-size: 12.5px;
   color: #4a5570;
 }
