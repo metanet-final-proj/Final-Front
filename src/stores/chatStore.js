@@ -69,10 +69,12 @@ const updateAgentStep = (activity, nextStep) => {
       ...activity,
       steps: steps.map((step) =>
         step.id === nextStep.id
-          ? {
-              ...step,
-              ...nextStep,
-            }
+          ? step.status === 'done' && nextStep.status !== 'done'
+            ? step
+            : {
+                ...step,
+                ...nextStep,
+              }
           : step,
       ),
     }

@@ -70,6 +70,7 @@ const roomActionMenuId = ref(null)
 const roomActionMenuPlacement = ref('up')
 const titleSaving = ref(false)
 const timeTick = ref(Date.now())
+const skipNextMessageScroll = ref(false)
 
 let timeTimer = null
 let mediaRecorder = null
@@ -242,6 +243,8 @@ const toggleAgentActivity = (message) => {
   const conversationId = message?.conversationId || activeRoomId.value
 
   if (!activity || !conversationId || !message?.id) return
+
+  skipNextMessageScroll.value = true
 
   chatStore.patchLocalMessage(conversationId, message.id, {
     agentActivity: {
@@ -824,6 +827,11 @@ const handleLogout = async () => {
 watch(
   activeMessages,
   () => {
+    if (skipNextMessageScroll.value) {
+      skipNextMessageScroll.value = false
+      return
+    }
+
     requestScrollThread()
   },
   {
@@ -1497,7 +1505,7 @@ onBeforeUnmount(() => {
                   stroke-linejoin="round"
                   aria-hidden="true"
                 >
-                  <polyline points="6 9 12 15 18 9" />
+                  <polyline points="18 15 12 9 6 15" />
                 </svg>
               </button>
 
@@ -1520,7 +1528,7 @@ onBeforeUnmount(() => {
                     stroke-linejoin="round"
                     aria-hidden="true"
                   >
-                    <polyline points="18 15 12 9 6 15" />
+                    <polyline points="6 9 12 15 18 9" />
                   </svg>
                 </button>
 
