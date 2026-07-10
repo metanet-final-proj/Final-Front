@@ -1,4 +1,5 @@
 import apiClient from './client'
+import { useAuthStore } from '../stores/authStore'
 
 const getApiBaseUrl = () => {
   if (import.meta.env.DEV) {
@@ -53,6 +54,18 @@ const parseSseEventBlock = (block) => {
   }
 }
 
+const createSseError = (data) => {
+  const message = typeof data === 'string'
+    ? data
+    : data?.message || data?.error || 'Failed to stream chat response.'
+  const error = new Error(message)
+
+  error.isSseError = true
+  error.responseText = typeof data === 'string' ? data : JSON.stringify(data)
+
+  return error
+}
+
 const consumeSseStream = async (response, handlers = {}) => {
   const reader = response.body?.getReader()
 
@@ -75,35 +88,35 @@ const consumeSseStream = async (response, handlers = {}) => {
     const blocks = buffer.split(/\n\n|\r\n\r\n/)
     buffer = blocks.pop() || ''
 
-    blocks.forEach((block) => {
+    for (const block of blocks) {
       const trimmedBlock = block.trim()
 
-      if (!trimmedBlock) return
+      if (!trimmedBlock) continue
 
       const parsed = parseSseEventBlock(trimmedBlock)
 
       if (parsed.event === 'user_message') {
         handlers.onUserMessage?.(parsed.data)
-        return
+        continue
       }
 
       if (parsed.event === 'chunk') {
         handlers.onChunk?.(parsed.data)
-        return
+        continue
       }
 
       if (parsed.event === 'assistant_message') {
         handlers.onAssistantMessage?.(parsed.data)
-        return
+        continue
       }
 
       if (parsed.event === 'error') {
         handlers.onError?.(parsed.data)
-        return
+        throw createSseError(parsed.data)
       }
 
       handlers.onEvent?.(parsed)
-    })
+    }
   }
 
   const remaining = buffer.trim()
@@ -119,6 +132,7 @@ const consumeSseStream = async (response, handlers = {}) => {
       handlers.onAssistantMessage?.(parsed.data)
     } else if (parsed.event === 'error') {
       handlers.onError?.(parsed.data)
+      throw createSseError(parsed.data)
     } else {
       handlers.onEvent?.(parsed)
     }
@@ -153,8 +167,11 @@ export const chatApi = {
 
   async sendMessageStream(conversationId, message, handlers = {}) {
     const baseUrl = getApiBaseUrl()
+    const authStore = useAuthStore()
 
-    const response = await fetch(
+    await authStore.ensureFreshAccessToken()
+
+    const sendRequest = () => fetch(
       `${baseUrl}/api/v1/chat/conversations/${conversationId}/messages`,
       {
         method: 'POST',
@@ -168,6 +185,13 @@ export const chatApi = {
         }),
       },
     )
+
+    let response = await sendRequest()
+
+    if (response.status === 401) {
+      await authStore.refreshAccessToken()
+      response = await sendRequest()
+    }
 
     if (!response.ok) {
       const errorText = await response.text()
