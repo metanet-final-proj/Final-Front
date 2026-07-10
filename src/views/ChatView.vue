@@ -843,64 +843,12 @@ onBeforeUnmount(() => {
           <span></span>
           시스템 정상
         </div>
-
-        <div class="profile-area">
-          <button class="profile-box" type="button" @click="toggleProfileMenu">
-            <div class="profile-avatar">{{ profileInitial }}</div>
-
-            <div class="profile-summary">
-              <strong>{{ profileHeaderText }}</strong>
-              <span>{{ profileDepartment }}</span>
-            </div>
-
-            <svg
-              class="profile-chevron"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#6B7690"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              :class="{ open: profileMenuOpen }"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-
-          <div v-if="profileMenuOpen" class="profile-menu">
-            <div class="profile-menu-user">
-              <strong>{{ profileHeaderText }}</strong>
-
-              <dl class="profile-detail-list">
-                <div>
-                  <dt>소속</dt>
-                  <dd>{{ profileDepartment }}</dd>
-                </div>
-
-                <div>
-                  <dt>이메일</dt>
-                  <dd>{{ profileEmail }}</dd>
-                </div>
-              </dl>
-            </div>
-
-            <button
-              class="logout-button"
-              type="button"
-              :disabled="logoutLoading"
-              @click="handleLogout"
-            >
-              {{ logoutLoading ? '로그아웃 중...' : '로그아웃' }}
-            </button>
-          </div>
-        </div>
       </div>
     </header>
 
     <div class="chat-body">
       <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+        <div class="sidebar-content">
         <template v-if="sidebarCollapsed">
           <div class="collapsed-sidebar">
             <button
@@ -1159,6 +1107,67 @@ onBeforeUnmount(() => {
             <span>문의: 경영지원팀 02-1234-5678</span>
           </section>
         </template>
+        </div>
+
+        <div class="profile-area sidebar-profile-area" :class="{ collapsed: sidebarCollapsed }">
+          <button class="profile-box sidebar-profile-box" type="button" @click="toggleProfileMenu">
+            <div class="profile-avatar">{{ profileInitial }}</div>
+
+            <div class="profile-summary">
+              <strong>{{ profileHeaderText }}</strong>
+              <span>{{ profileDepartment }}</span>
+            </div>
+
+            <svg
+              class="profile-chevron"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#6B7690"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              :class="{ open: profileMenuOpen }"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          <div v-if="profileMenuOpen" class="profile-menu">
+            <div class="profile-menu-user">
+              <strong>{{ profileHeaderText }}</strong>
+
+              <dl class="profile-detail-list">
+                <div>
+                  <dt>소속</dt>
+                  <dd>{{ profileDepartment }}</dd>
+                </div>
+
+                <div>
+                  <dt>이메일</dt>
+                  <dd>{{ profileEmail }}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <button
+              class="mypage-button"
+              type="button"
+            >
+              마이페이지
+            </button>
+
+            <button
+              class="logout-button"
+              type="button"
+              :disabled="logoutLoading"
+              @click="handleLogout"
+            >
+              {{ logoutLoading ? '로그아웃 중...' : '로그아웃' }}
+            </button>
+          </div>
+        </div>
       </aside>
 
       <main class="chat-main" :class="{ 'start-mode': showWelcome }">
@@ -1464,6 +1473,7 @@ onBeforeUnmount(() => {
   width: 160px;
   height: auto;
   display: block;
+  transform: translateX(15px);
 }
 
 .header-title-area p {
@@ -1631,6 +1641,23 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
+.mypage-button {
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-text);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.mypage-button:hover {
+  background: var(--color-bg);
+}
+
 .logout-button:hover {
   background: #fde6e4;
 }
@@ -1641,6 +1668,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-body {
+  --chat-body-bottom-padding: 20px;
   flex: 1;
   min-width: 0;
   max-width: none;
@@ -1655,20 +1683,17 @@ onBeforeUnmount(() => {
 .sidebar {
   width: 312px;
   flex-shrink: 0;
-  height: calc(100% + 68px);
+  height: calc(100% + 68px + var(--chat-body-bottom-padding));
   margin-top: -68px;
   position: relative;
   z-index: 10;
-  background: #f3f5fa;
+  background: #ffffff;
   box-shadow:
-    -100vw 0 0 100vw #f3f5fa,
+    -100vw 0 0 100vw #fffff,
     inset -1px 0 0 rgba(255, 255, 255, 1);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 2px;
+  overflow: visible;
   transition:
     width 0.2s ease,
     padding 0.2s ease;
@@ -1677,8 +1702,26 @@ onBeforeUnmount(() => {
 .sidebar.collapsed {
   width: 50px;
   padding-right: 0;
-  overflow: hidden;
+  overflow: visible;
   align-items: center;
+}
+
+.sidebar-content {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+}
+
+.sidebar.collapsed .sidebar-content {
+  align-items: center;
+  padding-right: 0;
+  overflow: hidden;
 }
 
 .collapsed-sidebar {
@@ -1701,6 +1744,7 @@ onBeforeUnmount(() => {
   align-items: stretch;
   gap: 10px;
   flex-shrink: 0;
+  margin-bottom: 20px;
 }
 
 .sidebar-brand-row {
@@ -1722,21 +1766,21 @@ onBeforeUnmount(() => {
   min-width: 0;
   height: 48px;
   border: none;
-  background: var(--color-primary-light);
-  color: var(--color-white);
+  background: var(--color-white-light);
+  color: var(--color-black);
   font-size: 14px;
   font-weight: 700;
-  border-radius: 14px;
+  border-radius: 10px;
   padding: 0 16px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: left;
   gap: 9px;
   white-space: nowrap;
 }
 
 .new-chat-button:hover {
-  background: var(--color-primary);
+  background: var(--color-bg);
 }
 
 .sidebar-toggle-button {
@@ -1814,6 +1858,67 @@ onBeforeUnmount(() => {
   background: var(--color-primary);
 }
 
+.sidebar-profile-area {
+  width: 100%;
+  flex-shrink: 0;
+  background: #f3f5fa;
+  border-top: 1px solid rgba(255, 255, 255, 0.9);
+  padding: 10px 14px 8px 0;
+  z-index: 2;
+}
+
+.sidebar-profile-box {
+  width: 100%;
+  min-width: 0;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  justify-content: flex-start;
+  padding: 8px 10px;
+}
+
+.sidebar-profile-box:hover {
+  background: #f6f9ff;
+  border-color: var(--color-primary-light);
+}
+
+.sidebar-profile-area.collapsed {
+  display: flex;
+  justify-content: center;
+  border-top: none;
+  padding: 8px 0;
+}
+
+.sidebar-profile-area.collapsed .sidebar-profile-box {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 11px;
+}
+
+.sidebar-profile-area.collapsed .profile-avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.sidebar-profile-area.collapsed .profile-summary,
+.sidebar-profile-area.collapsed .profile-chevron {
+  display: none;
+}
+
+.sidebar-profile-area .profile-menu {
+  top: auto;
+  right: 14px;
+  bottom: calc(100% + 10px);
+}
+
+.sidebar-profile-area.collapsed .profile-menu {
+  right: auto;
+  left: calc(100% + 10px);
+  bottom: 12px;
+}
+
 .side-card,
 .guide-card {
   flex-shrink: 0;
@@ -1872,7 +1977,7 @@ onBeforeUnmount(() => {
   border: none;
   background: var(--color-primary-light);
   color: var(--color-white);
-  border-radius: 10px;
+  border-radius: 20px;
   padding: 10px 12px;
   font-size: 12.5px;
   font-weight: 800;
