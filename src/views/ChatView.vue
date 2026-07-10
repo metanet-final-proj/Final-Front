@@ -942,7 +942,15 @@ onBeforeUnmount(() => {
             class="side-card shortcut-card"
             :class="{ collapsed: sidebarSectionCollapsed.shortcuts }"
           >
-            <div class="side-card-header">
+            <div
+              class="side-card-header"
+              role="button"
+              tabindex="0"
+              :aria-expanded="!sidebarSectionCollapsed.shortcuts"
+              @click="toggleSidebarSection('shortcuts')"
+              @keydown.enter.prevent="toggleSidebarSection('shortcuts')"
+              @keydown.space.prevent="toggleSidebarSection('shortcuts')"
+            >
               <h2>
                 <span class="side-row-icon">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -952,11 +960,9 @@ onBeforeUnmount(() => {
                 </span>
                 오늘의 업무 바로가기
               </h2>
-              <button
+              <span
                 class="side-section-toggle"
-                type="button"
-                :aria-expanded="!sidebarSectionCollapsed.shortcuts"
-                @click="toggleSidebarSection('shortcuts')"
+                aria-hidden="true"
               >
                 <svg
                   class="side-section-chevron"
@@ -972,7 +978,7 @@ onBeforeUnmount(() => {
                 >
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
-              </button>
+              </span>
             </div>
 
             <button
@@ -993,7 +999,15 @@ onBeforeUnmount(() => {
             class="side-card faq-card"
             :class="{ collapsed: sidebarSectionCollapsed.faqs }"
           >
-            <div class="side-card-header faq-card-header">
+            <div
+              class="side-card-header faq-card-header"
+              role="button"
+              tabindex="0"
+              :aria-expanded="!sidebarSectionCollapsed.faqs"
+              @click="toggleSidebarSection('faqs')"
+              @keydown.enter.prevent="toggleSidebarSection('faqs')"
+              @keydown.space.prevent="toggleSidebarSection('faqs')"
+            >
               <h2 class="faq-title">
                 <span class="side-row-icon">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -1003,11 +1017,9 @@ onBeforeUnmount(() => {
                 </span>
                 자주 묻는 업무
               </h2>
-              <button
+              <span
                 class="side-section-toggle"
-                type="button"
-                :aria-expanded="!sidebarSectionCollapsed.faqs"
-                @click="toggleSidebarSection('faqs')"
+                aria-hidden="true"
               >
                 <svg
                   class="side-section-chevron"
@@ -1023,7 +1035,7 @@ onBeforeUnmount(() => {
                 >
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
-              </button>
+              </span>
             </div>
 
             <div v-if="!sidebarSectionCollapsed.faqs" class="faq-list">
@@ -1043,7 +1055,15 @@ onBeforeUnmount(() => {
             class="side-card room-card"
             :class="{ collapsed: sidebarSectionCollapsed.rooms }"
           >
-            <div class="side-card-header">
+            <div
+              class="side-card-header"
+              role="button"
+              tabindex="0"
+              :aria-expanded="!sidebarSectionCollapsed.rooms"
+              @click="toggleSidebarSection('rooms')"
+              @keydown.enter.prevent="toggleSidebarSection('rooms')"
+              @keydown.space.prevent="toggleSidebarSection('rooms')"
+            >
               <h2>
                 <span class="side-row-icon">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -1054,11 +1074,9 @@ onBeforeUnmount(() => {
                 채팅 목록
               </h2>
               <span class="room-count">{{ roomCount }}개</span>
-              <button
+              <span
                 class="side-section-toggle"
-                type="button"
-                :aria-expanded="!sidebarSectionCollapsed.rooms"
-                @click="toggleSidebarSection('rooms')"
+                aria-hidden="true"
               >
                 <svg
                   class="side-section-chevron"
@@ -1074,7 +1092,7 @@ onBeforeUnmount(() => {
                 >
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
-              </button>
+              </span>
             </div>
 
             <div v-if="!sidebarSectionCollapsed.rooms && chatStore.loading" class="room-loading">
@@ -1120,8 +1138,6 @@ onBeforeUnmount(() => {
                         {{ room.title }}
                       </span>
                     </template>
-
-                    <span class="room-time">{{ formatRelativeTime(room.createdAt) }}</span>
                   </div>
                 </div>
 
@@ -1129,6 +1145,7 @@ onBeforeUnmount(() => {
                   class="room-actions"
                   @click.stop
                 >
+                  <span class="room-time">{{ formatRelativeTime(room.createdAt) }}</span>
                   <button
                     class="room-menu-button"
                     type="button"
@@ -1693,7 +1710,7 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   box-shadow: 0 18px 40px rgba(23, 48, 110, 0.14);
   padding: 12px;
-  z-index: 20;
+  z-index: 60;
 }
 
 .profile-menu-user {
@@ -1893,12 +1910,12 @@ onBeforeUnmount(() => {
 }
 
 .sidebar-toggle-button {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   border: 1px solid var(--color-border);
   background: var(--color-white);
-  border-radius: 14px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1910,9 +1927,6 @@ onBeforeUnmount(() => {
 }
 
 .collapsed-sidebar .sidebar-toggle-button {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
   position: relative;
   overflow: hidden;
 }
@@ -1968,12 +1982,13 @@ onBeforeUnmount(() => {
 }
 
 .sidebar-profile-area {
+  position: relative;
   width: 100%;
   flex-shrink: 0;
-  background: #fffff;
+  background: #ffffff;
   border-top: 1px solid rgba(255, 255, 255, 0.9);
   padding: 10px 14px 8px 0;
-  z-index: 2;
+  z-index: 50;
 }
 
 .sidebar-profile-box {
@@ -2075,6 +2090,12 @@ onBeforeUnmount(() => {
   background: var(--color-bg);
 }
 
+.side-card-header:focus-visible {
+  background: var(--color-bg);
+  outline: 2px solid rgba(49, 96, 180, 0.18);
+  outline-offset: 1px;
+}
+
 .side-card h2,
 .side-card-header h2,
 .guide-card h2 {
@@ -2131,11 +2152,8 @@ onBeforeUnmount(() => {
   width: 26px;
   height: 26px;
   margin-left: auto;
-  border: none;
-  background: transparent;
   color: var(--color-subtle);
   border-radius: 7px;
-  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2147,12 +2165,13 @@ onBeforeUnmount(() => {
 }
 
 .side-card-header:hover .side-section-toggle,
-.side-section-toggle:focus-visible,
-.side-section-toggle[aria-expanded='true'] {
+.side-card-header:focus-visible .side-section-toggle,
+.side-card-header[aria-expanded='true'] .side-section-toggle {
   opacity: 1;
 }
 
-.side-section-toggle:hover {
+.side-card-header:hover .side-section-toggle,
+.side-card-header:focus-visible .side-section-toggle {
   background: var(--color-bg);
   color: var(--color-primary);
 }
@@ -2163,14 +2182,6 @@ onBeforeUnmount(() => {
 
 .side-section-chevron.collapsed {
   transform: rotate(-90deg);
-}
-
-.side-card-header button {
-  border: none;
-  background: transparent;
-  color: var(--color-subtle);
-  font-size: 12px;
-  padding: 0;
 }
 
 .room-loading,
@@ -2220,7 +2231,7 @@ onBeforeUnmount(() => {
 
 .room-item {
   width: 100%;
-  min-height: 58px;
+  min-height: 50px;
   border: 1px solid transparent;
   background: transparent;
   border-radius: 11px;
@@ -2243,15 +2254,19 @@ onBeforeUnmount(() => {
 .room-select-body {
   flex: 1;
   min-width: 0;
-  padding: 23px 8px 8px 12px;
+  padding: 8px 72px 8px 12px;
   border-radius: 11px;
 }
 
 .room-actions {
   position: absolute;
-  top: 4px;
+  top: 50%;
   right: 6px;
-  z-index: 5;
+  transform: translateY(-50%);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .room-menu-button {
@@ -2333,17 +2348,16 @@ onBeforeUnmount(() => {
 }
 
 .room-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  min-width: 0;
 }
 
 .room-title-text {
   flex: 1;
   min-width: 0;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
@@ -2352,7 +2366,7 @@ onBeforeUnmount(() => {
 
 .room-item.active .room-title-text {
   color: var(--color-primary);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .room-title-input {
@@ -2374,11 +2388,11 @@ onBeforeUnmount(() => {
 }
 
 .room-time {
-  justify-self: end;
   font-size: 11px;
   line-height: 1;
   color: var(--color-placeholder);
   text-align: right;
+  white-space: nowrap;
 }
 
 .shortcut-item {
