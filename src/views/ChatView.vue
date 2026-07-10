@@ -3,6 +3,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import chatbotLogo from '../assets/images/officelink-logo.svg'
 import chatbotLogo2 from '../assets/images/officelink-logo-nobg.svg'
+import loopIcon from '../assets/images/loop.svg'
+import loadingIcon from '../assets/images/loading.svg'
+import checkAllIcon from '../assets/images/check-all.svg'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import MarkdownIt from 'markdown-it'
@@ -10,6 +13,7 @@ import DOMPurify from 'dompurify'
 import officeLinkTitle from '../assets/images/officelink-logo-title-wide-nobg.svg'
 import { useWorkhubStore } from '../stores/workhubStore'
 import { speechApi } from '../api/speechApi'
+import MyPagePanel from '../components/mypage/MyPagePanel.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -34,11 +38,22 @@ const renderMarkdown = (text) => {
   })
 }
 
+const MAIN_PANEL = {
+  CHAT: 'chat',
+  MYPAGE: 'mypage',
+}
+
 const draft = ref('')
+const mainPanel = ref(MAIN_PANEL.CHAT)
 const panelKey = ref(null)
 const threadRef = ref(null)
 const composerInputRef = ref(null)
 const sidebarCollapsed = ref(false)
+const sidebarSectionCollapsed = ref({
+  rooms: false,
+  shortcuts: true,
+  faqs: true,
+})
 const profileMenuOpen = ref(false)
 const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
@@ -55,6 +70,7 @@ const roomActionMenuId = ref(null)
 const roomActionMenuPlacement = ref('up')
 const titleSaving = ref(false)
 const timeTick = ref(Date.now())
+const skipNextMessageScroll = ref(false)
 
 let timeTimer = null
 let mediaRecorder = null
@@ -221,6 +237,22 @@ const isDefaultAssistantPrompt = (message) => {
 const visibleMessages = computed(() => {
   return activeMessages.value.filter((message) => !isDefaultAssistantPrompt(message))
 })
+
+const toggleAgentActivity = (message) => {
+  const activity = message?.agentActivity
+  const conversationId = message?.conversationId || activeRoomId.value
+
+  if (!activity || !conversationId || !message?.id) return
+
+  skipNextMessageScroll.value = true
+
+  chatStore.patchLocalMessage(conversationId, message.id, {
+    agentActivity: {
+      ...activity,
+      collapsed: !activity.collapsed,
+    },
+  })
+}
 
 const normalizeId = (value) => {
   if (value === null || value === undefined) return ''
@@ -493,6 +525,7 @@ const requestScrollThread = () => {
 }
 
 const selectRoom = async (roomId) => {
+  mainPanel.value = MAIN_PANEL.CHAT
   composingNewChat.value = false
   roomActionMenuId.value = null
   chatStore.setActiveConversation(roomId)
@@ -517,6 +550,7 @@ const sendMessage = async (text = draft.value) => {
   const messageText = text.trim()
 
   if (!messageText || isAnswering.value || isTranscribing.value) return
+  mainPanel.value = MAIN_PANEL.CHAT
 
   let conversationId
 
@@ -576,6 +610,7 @@ const handleComposerKeydown = (event) => {
 }
 
 const createNewChat = async (initialTitle = '') => {
+  mainPanel.value = MAIN_PANEL.CHAT
   const titleText = typeof initialTitle === 'string' ? initialTitle.trim() : ''
 
   if (!titleText) {
@@ -760,8 +795,19 @@ const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
 
+const toggleSidebarSection = (section) => {
+  sidebarSectionCollapsed.value[section] = !sidebarSectionCollapsed.value[section]
+}
+
 const toggleProfileMenu = () => {
   profileMenuOpen.value = !profileMenuOpen.value
+}
+
+const openMyPage = () => {
+  mainPanel.value = MAIN_PANEL.MYPAGE
+  profileMenuOpen.value = false
+  panelKey.value = null
+  roomActionMenuId.value = null
 }
 
 const handleLogout = async () => {
@@ -781,6 +827,11 @@ const handleLogout = async () => {
 watch(
   activeMessages,
   () => {
+    if (skipNextMessageScroll.value) {
+      skipNextMessageScroll.value = false
+      return
+    }
+
     requestScrollThread()
   },
   {
@@ -843,64 +894,12 @@ onBeforeUnmount(() => {
           <span></span>
           시스템 정상
         </div>
-
-        <div class="profile-area">
-          <button class="profile-box" type="button" @click="toggleProfileMenu">
-            <div class="profile-avatar">{{ profileInitial }}</div>
-
-            <div class="profile-summary">
-              <strong>{{ profileHeaderText }}</strong>
-              <span>{{ profileDepartment }}</span>
-            </div>
-
-            <svg
-              class="profile-chevron"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#6B7690"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              :class="{ open: profileMenuOpen }"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-
-          <div v-if="profileMenuOpen" class="profile-menu">
-            <div class="profile-menu-user">
-              <strong>{{ profileHeaderText }}</strong>
-
-              <dl class="profile-detail-list">
-                <div>
-                  <dt>소속</dt>
-                  <dd>{{ profileDepartment }}</dd>
-                </div>
-
-                <div>
-                  <dt>이메일</dt>
-                  <dd>{{ profileEmail }}</dd>
-                </div>
-              </dl>
-            </div>
-
-            <button
-              class="logout-button"
-              type="button"
-              :disabled="logoutLoading"
-              @click="handleLogout"
-            >
-              {{ logoutLoading ? '로그아웃 중...' : '로그아웃' }}
-            </button>
-          </div>
-        </div>
       </div>
     </header>
 
     <div class="chat-body">
       <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+        <div class="sidebar-content">
         <template v-if="sidebarCollapsed">
           <div class="collapsed-sidebar">
             <button
@@ -909,7 +908,14 @@ onBeforeUnmount(() => {
               aria-label="사이드바 펼치기"
               @click="toggleSidebar"
             >
+              <img
+                class="collapsed-sidebar-logo"
+                :src="chatbotLogo2"
+                alt=""
+                aria-hidden="true"
+              />
               <svg
+                class="collapsed-sidebar-icon"
                 width="18"
                 height="18"
                 viewBox="0 0 24 24"
@@ -941,7 +947,7 @@ onBeforeUnmount(() => {
             <div class="sidebar-brand-row">
               <img
                 class="sidebar-title-logo"
-                :src="officeLinkTitle"
+                :src="chatbotLogo"
                 alt="Office Link"
               />
 
@@ -969,34 +975,185 @@ onBeforeUnmount(() => {
             </div>
 
             <button class="new-chat-button" type="button" @click="createNewChat">
-              <span>＋</span>
+              <span class="side-row-icon side-row-plus">＋</span>
               {{ chatStore.creating ? '생성 중...' : '새 대화 시작' }}
             </button>
           </div>
 
-          <section class="side-card">
-            <div class="side-card-header">
-              <h2>채팅 목록</h2>
-              <span>{{ roomCount }}개</span>
+          <section
+            class="side-card shortcut-card"
+            :class="{ collapsed: sidebarSectionCollapsed.shortcuts }"
+          >
+            <div
+              class="side-card-header"
+              role="button"
+              tabindex="0"
+              :aria-expanded="!sidebarSectionCollapsed.shortcuts"
+              @click="toggleSidebarSection('shortcuts')"
+              @keydown.enter.prevent="toggleSidebarSection('shortcuts')"
+              @keydown.space.prevent="toggleSidebarSection('shortcuts')"
+            >
+              <h2>
+                <span class="side-row-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M0 0h24v24H0z" fill="none" />
+                    <path fill="currentColor" d="m10.95 18l5.65-5.65l-1.45-1.45l-4.225 4.225l-2.1-2.1L7.4 14.45zM6 22q-.825 0-1.412-.587T4 20V4q0-.825.588-1.412T6 2h8l6 6v12q0 .825-.587 1.413T18 22zm7-13V4H6v16h12V9zM6 4v5zv16z" />
+                  </svg>
+                </span>
+                오늘의 업무 바로가기
+              </h2>
+              <span
+                class="side-section-toggle"
+                aria-hidden="true"
+              >
+                <svg
+                  class="side-section-chevron"
+                  :class="{ collapsed: sidebarSectionCollapsed.shortcuts }"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
             </div>
 
-            <div v-if="chatStore.loading" class="room-loading">
+            <button
+              v-if="!sidebarSectionCollapsed.shortcuts"
+              v-for="item in shortcuts"
+              :key="item.key"
+              class="shortcut-item"
+              type="button"
+              :disabled="item.disabled || workhubStore.loading"
+              @click="togglePanel(item.key)"
+            >
+              <span>{{ item.label }}</span>
+              <strong :class="item.tone">{{ item.value }} ›</strong>
+            </button>
+          </section>
+
+          <section
+            class="side-card faq-card"
+            :class="{ collapsed: sidebarSectionCollapsed.faqs }"
+          >
+            <div
+              class="side-card-header faq-card-header"
+              role="button"
+              tabindex="0"
+              :aria-expanded="!sidebarSectionCollapsed.faqs"
+              @click="toggleSidebarSection('faqs')"
+              @keydown.enter.prevent="toggleSidebarSection('faqs')"
+              @keydown.space.prevent="toggleSidebarSection('faqs')"
+            >
+              <h2 class="faq-title">
+                <span class="side-row-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M0 0h24v24H0z" fill="none" />
+                    <path fill="currentColor" d="M12 3C6.49 3 2 7.49 2 13v6c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-5c0-.55-.45-1-1-1H4c0-4.41 3.59-8 8-8s8 3.59 8 8h-2c-.55 0-1 .45-1 1v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-6c0-5.51-4.49-10-10-10" />
+                  </svg>
+                </span>
+                자주 묻는 업무
+              </h2>
+              <span
+                class="side-section-toggle"
+                aria-hidden="true"
+              >
+                <svg
+                  class="side-section-chevron"
+                  :class="{ collapsed: sidebarSectionCollapsed.faqs }"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </div>
+
+            <div v-if="!sidebarSectionCollapsed.faqs" class="faq-list">
+              <button
+                v-for="faq in faqs"
+                :key="faq.label"
+                type="button"
+                :disabled="isAnswering"
+                @click="sendMessage(faq.query)"
+              >
+                {{ faq.label }}
+              </button>
+            </div>
+          </section>
+
+          <section
+            class="side-card room-card"
+            :class="{ collapsed: sidebarSectionCollapsed.rooms }"
+          >
+            <div
+              class="side-card-header"
+              role="button"
+              tabindex="0"
+              :aria-expanded="!sidebarSectionCollapsed.rooms"
+              @click="toggleSidebarSection('rooms')"
+              @keydown.enter.prevent="toggleSidebarSection('rooms')"
+              @keydown.space.prevent="toggleSidebarSection('rooms')"
+            >
+              <h2>
+                <span class="side-row-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M0 0h24v24H0z" fill="none" />
+                    <path fill="currentColor" d="M4 20q-.825 0-1.412-.587T2 18V6q0-.825.588-1.412T4 4h16q.825 0 1.413.588T22 6v12q0 .825-.587 1.413T20 20zm8-7L4 8v10h16V8zm0-2l8-5H4zM4 8V6v12z" />
+                  </svg>
+                </span>
+                채팅 목록
+              </h2>
+              <span class="room-count">{{ roomCount }}개</span>
+              <span
+                class="side-section-toggle"
+                aria-hidden="true"
+              >
+                <svg
+                  class="side-section-chevron"
+                  :class="{ collapsed: sidebarSectionCollapsed.rooms }"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </div>
+
+            <div v-if="!sidebarSectionCollapsed.rooms && chatStore.loading" class="room-loading">
               채팅을 불러오는 중입니다.
             </div>
 
-            <div v-else-if="rooms.length === 0" class="room-empty">
+            <div v-else-if="!sidebarSectionCollapsed.rooms && rooms.length === 0" class="room-empty">
               <p>아직 채팅이 없습니다.</p>
               <button type="button" @click="createNewChat">
                 첫 채팅 시작하기
               </button>
             </div>
 
-            <div v-else class="room-list">
+            <div v-else-if="!sidebarSectionCollapsed.rooms" class="room-list">
               <article
                 v-for="room in rooms"
                 :key="room.id"
                 class="room-item"
-                :class="{ active: room.id === activeRoomId }"
+                :class="{ active: room.id === activeRoomId, 'menu-open': roomActionMenuId === room.id }"
                 @click="selectRoom(room.id)"
               >
                 <div class="room-select-body">
@@ -1023,8 +1180,6 @@ onBeforeUnmount(() => {
                         {{ room.title }}
                       </span>
                     </template>
-
-                    <span class="room-time">{{ formatRelativeTime(room.createdAt) }}</span>
                   </div>
                 </div>
 
@@ -1032,6 +1187,7 @@ onBeforeUnmount(() => {
                   class="room-actions"
                   @click.stop
                 >
+                  <span class="room-time">{{ formatRelativeTime(room.createdAt) }}</span>
                   <button
                     class="room-menu-button"
                     type="button"
@@ -1107,41 +1263,6 @@ onBeforeUnmount(() => {
             </div>
           </section>
 
-          <section class="side-card shortcut-card">
-            <div class="side-card-header">
-              <h2>오늘의 업무 바로가기</h2>
-              <button type="button">편집</button>
-            </div>
-
-            <button
-              v-for="item in shortcuts"
-              :key="item.key"
-              class="shortcut-item"
-              type="button"
-              :disabled="item.disabled || workhubStore.loading"
-              @click="togglePanel(item.key)"
-            >
-              <span>{{ item.label }}</span>
-              <strong :class="item.tone">{{ item.value }} ›</strong>
-            </button>
-          </section>
-
-          <section class="side-card faq-card">
-            <h2 class="faq-title">자주 묻는 업무</h2>
-
-            <div class="faq-list">
-              <button
-                v-for="faq in faqs"
-                :key="faq.label"
-                type="button"
-                :disabled="isAnswering"
-                @click="sendMessage(faq.query)"
-              >
-                {{ faq.label }}
-              </button>
-            </div>
-          </section>
-
           <section class="guide-card">
             <h2>이용 안내</h2>
             <p>
@@ -1152,9 +1273,84 @@ onBeforeUnmount(() => {
             <span>문의: 경영지원팀 02-1234-5678</span>
           </section>
         </template>
+        </div>
+
+        <div class="profile-area sidebar-profile-area" :class="{ collapsed: sidebarCollapsed }">
+          <button class="profile-box sidebar-profile-box" type="button" @click="toggleProfileMenu">
+            <div class="profile-avatar">{{ profileInitial }}</div>
+
+            <div class="profile-summary">
+              <strong>{{ profileHeaderText }}</strong>
+              <span>{{ profileDepartment }}</span>
+            </div>
+
+            <svg
+              class="profile-chevron"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#6B7690"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              :class="{ open: profileMenuOpen }"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+
+          <div v-if="profileMenuOpen" class="profile-menu">
+            <div class="profile-menu-user">
+              <strong>{{ profileHeaderText }}</strong>
+
+              <dl class="profile-detail-list">
+                <div>
+                  <dt>소속</dt>
+                  <dd>{{ profileDepartment }}</dd>
+                </div>
+
+                <div>
+                  <dt>이메일</dt>
+                  <dd>{{ profileEmail }}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <button
+              class="mypage-button"
+              type="button"
+              @click="openMyPage"
+            >
+              마이페이지
+            </button>
+
+            <button
+              class="logout-button"
+              type="button"
+              :disabled="logoutLoading"
+              @click="handleLogout"
+            >
+              {{ logoutLoading ? '로그아웃 중...' : '로그아웃' }}
+            </button>
+          </div>
+        </div>
       </aside>
 
-      <main class="chat-main" :class="{ 'start-mode': showWelcome }">
+      <main
+        class="chat-main"
+        :class="{
+          'start-mode': mainPanel === MAIN_PANEL.CHAT && showWelcome,
+          'mypage-mode': mainPanel === MAIN_PANEL.MYPAGE,
+        }"
+      >
+  <MyPagePanel
+    v-if="mainPanel === MAIN_PANEL.MYPAGE"
+    :user="authStore.user"
+    :profile="authStore.employeeProfile"
+  />
+
+  <template v-else>
   <template v-if="showWelcome">
     <section class="start-screen">
       <div class="start-hero">
@@ -1268,14 +1464,100 @@ onBeforeUnmount(() => {
             alt="AI 어시스턴트 로고"
           />
 
-          <div class="message-content">
+          <div
+            class="message-content"
+            :class="{ 'has-agent-activity': message.agentActivity }"
+          >
             <span v-if="message.tag" class="message-tag">
               {{ message.tag }}
             </span>
 
             <div
+              v-if="message.agentActivity && message.isLoading"
+              class="agent-status-bubble"
+              role="status"
+            >
+              <img class="agent-loop-icon" :src="loopIcon" alt="" />
+              <span>{{ message.agentActivity.currentText || message.text }}</span>
+            </div>
+
+            <div
+              v-if="message.agentActivity?.steps?.length"
+              class="agent-activity-card"
+              :class="{ collapsed: message.agentActivity.collapsed }"
+            >
+              <button
+                v-if="message.agentActivity.collapsed"
+                type="button"
+                class="agent-activity-summary"
+                :aria-expanded="false"
+                @click="toggleAgentActivity(message)"
+              >
+                <span>Show reasoning summary</span>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              </button>
+
+              <template v-else>
+                <button
+                  type="button"
+                  class="agent-activity-header"
+                  :aria-expanded="true"
+                  @click="toggleAgentActivity(message)"
+                >
+                  <span>작업 과정</span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+
+                <div class="agent-step-list">
+                  <div
+                    v-for="step in message.agentActivity.steps"
+                    :key="step.id"
+                    class="agent-step"
+                    :class="step.status"
+                  >
+                    <img
+                      class="agent-step-icon"
+                      :class="{ running: step.status !== 'done' }"
+                      :src="step.status === 'done' ? checkAllIcon : loadingIcon"
+                      alt=""
+                    />
+                    <div class="agent-step-body">
+                      <p>{{ step.title }}</p>
+                      <span v-if="step.tool">{{ step.tool }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <div
+              v-if="!message.agentActivity || !message.isLoading"
               class="assistant-bubble markdown-content"
-              :class="{ 'loading-answer': message.isLoading }"
+              :class="{ 'loading-answer': message.isLoading && !message.agentActivity }"
               v-html="message.isLoading ? message.text : renderMarkdown(message.text)"
             ></div>
 
@@ -1353,6 +1635,7 @@ onBeforeUnmount(() => {
 
       <p>AI가 생성한 답변은 참고용으로 활용해 주세요.</p>
     </section>
+  </template>
   </template>
 </main>
 
@@ -1454,9 +1737,10 @@ onBeforeUnmount(() => {
 
 .header-title-logo,
 .sidebar-title-logo {
-  width: 160px;
+  width: 50px;
   height: auto;
   display: block;
+  transform: translateX(15px);
 }
 
 .header-title-area p {
@@ -1525,6 +1809,7 @@ onBeforeUnmount(() => {
 }
 
 .profile-summary {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1569,7 +1854,7 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   box-shadow: 0 18px 40px rgba(23, 48, 110, 0.14);
   padding: 12px;
-  z-index: 20;
+  z-index: 60;
 }
 
 .profile-menu-user {
@@ -1624,6 +1909,23 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
+.mypage-button {
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-text);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.mypage-button:hover {
+  background: var(--color-bg);
+}
+
 .logout-button:hover {
   background: #fde6e4;
 }
@@ -1634,41 +1936,80 @@ onBeforeUnmount(() => {
 }
 
 .chat-body {
+  --chat-body-bottom-padding: 20px;
   flex: 1;
   min-width: 0;
-  max-width: 1720px;
+  max-width: none;
   width: 100%;
-  margin: 0 auto;
+  margin: 0;
   min-height: 0;
   display: flex;
   gap: 20px;
-  padding: 20px 24px;
+  padding: 20px 24px 20px 0;
 }
 
 .sidebar {
   width: 312px;
   flex-shrink: 0;
-  height: calc(100% + 68px);
+  height: calc(100% + 68px + var(--chat-body-bottom-padding));
   margin-top: -68px;
   position: relative;
   z-index: 10;
-  background: #f3f5fa;
+  background: #ffffff;
   box-shadow:
-    -100vw 0 0 100vw #f3f5fa,
+    -100vw 0 0 100vw #fffff,
     inset -1px 0 0 rgba(255, 255, 255, 1);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 2px;
+  overflow: visible;
   transition:
     width 0.2s ease,
     padding 0.2s ease;
+  border-right: 1px solid var(--color-border);
 }
 
 .sidebar.collapsed {
-  width: 56px;
+  width: 50px;
+  padding-right: 0;
+  overflow: visible;
+  align-items: center;
+}
+
+.sidebar-content {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: #c9d2e4 transparent;
+}
+
+.sidebar-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-content::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+  background: #c9d2e4;
+  border-radius: 999px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar.collapsed .sidebar-content {
+  align-items: center;
   padding-right: 0;
   overflow: hidden;
 }
@@ -1678,16 +2019,12 @@ onBeforeUnmount(() => {
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
-  padding: 10px 8px;
+  padding: 8px 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
-}
-
-.sidebar.collapsed .collapsed-sidebar {
-  transform: translateX(-6px);
 }
 
 .sidebar-top {
@@ -1697,6 +2034,7 @@ onBeforeUnmount(() => {
   align-items: stretch;
   gap: 10px;
   flex-shrink: 0;
+  margin-bottom: 0;
 }
 
 .sidebar-brand-row {
@@ -1713,35 +2051,36 @@ onBeforeUnmount(() => {
 }
 
 .new-chat-button {
-  width: 100%;
+  width: calc(100% - 28px);
   flex: none;
   min-width: 0;
-  height: 48px;
+  height: 40px;
+  margin: 0 14px;
   border: none;
-  background: var(--color-primary-light);
-  color: var(--color-white);
+  background: transparent;
+  color: var(--color-text);
   font-size: 14px;
   font-weight: 700;
-  border-radius: 14px;
-  padding: 0 16px;
+  border-radius: 10px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 9px;
+  justify-content: flex-start;
+  gap: 8px;
   white-space: nowrap;
 }
 
 .new-chat-button:hover {
-  background: var(--color-primary);
+  background: var(--color-bg);
 }
 
 .sidebar-toggle-button {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   border: 1px solid var(--color-border);
   background: var(--color-white);
-  border-radius: 14px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1753,19 +2092,52 @@ onBeforeUnmount(() => {
 }
 
 .collapsed-sidebar .sidebar-toggle-button {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.collapsed-sidebar-logo,
+.collapsed-sidebar-icon {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+
+.collapsed-sidebar-logo {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  opacity: 1;
+}
+
+.collapsed-sidebar-icon {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.92);
+}
+
+.collapsed-sidebar .sidebar-toggle-button:hover .collapsed-sidebar-logo,
+.collapsed-sidebar .sidebar-toggle-button:focus-visible .collapsed-sidebar-logo {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.92);
+}
+
+.collapsed-sidebar .sidebar-toggle-button:hover .collapsed-sidebar-icon,
+.collapsed-sidebar .sidebar-toggle-button:focus-visible .collapsed-sidebar-icon {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .collapsed-new-chat-button {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: var(--color-primary-light);
   color: var(--color-white);
-  border-radius: 12px;
-  font-size: 22px;
+  border-radius: 11px;
+  font-size: 20px;
   font-weight: 700;
   line-height: 1;
 }
@@ -1774,11 +2146,73 @@ onBeforeUnmount(() => {
   background: var(--color-primary);
 }
 
+.sidebar-profile-area {
+  position: relative;
+  width: 100%;
+  flex-shrink: 0;
+  background: #ffffff;
+  border-top: 1px solid rgba(255, 255, 255, 0.9);
+  padding: 10px 14px 8px 0;
+  z-index: 50;
+}
+
+.sidebar-profile-box {
+  width: 100%;
+  min-width: 0;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  justify-content: flex-start;
+  padding: 8px 10px;
+}
+
+.sidebar-profile-box:hover {
+  background: #f6f9ff;
+  border-color: var(--color-border);
+}
+
+.sidebar-profile-area.collapsed {
+  display: flex;
+  justify-content: center;
+  border-top: none;
+  padding: 8px 0;
+}
+
+.sidebar-profile-area.collapsed .sidebar-profile-box {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 11px;
+}
+
+.sidebar-profile-area.collapsed .profile-avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.sidebar-profile-area.collapsed .profile-summary,
+.sidebar-profile-area.collapsed .profile-chevron {
+  display: none;
+}
+
+.sidebar-profile-area .profile-menu {
+  top: auto;
+  right: 14px;
+  bottom: calc(100% + 10px);
+}
+
+.sidebar-profile-area.collapsed .profile-menu {
+  right: auto;
+  left: calc(100% + 10px);
+  bottom: 12px;
+}
+
 .side-card,
 .guide-card {
   flex-shrink: 0;
   background: var(--color-white);
-  border: 1px solid var(--color-border);
+  border: none;
   border-radius: var(--radius-lg);
 }
 
@@ -1786,21 +2220,84 @@ onBeforeUnmount(() => {
   padding: 14px;
 }
 
+.room-card {
+  margin-top: 14px;
+}
+
+.shortcut-card,
+.faq-card {
+  padding: 0 14px;
+}
+
+.shortcut-card:not(.collapsed),
+.faq-card:not(.collapsed) {
+  padding-bottom: 8px;
+}
+
 .side-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 0; 
+  min-height: 40px;
+  border-radius: 10px;
+  padding: 0 10px;
+  transition: background 0.15s ease;
+}
+
+.room-card .side-card-header,
+.shortcut-card:not(.collapsed) .side-card-header,
+.faq-card:not(.collapsed) .side-card-header {
   margin-bottom: 10px;
-  padding: 0 4px;
+}
+
+.side-card-header:hover {
+  background: var(--color-bg);
+}
+
+.side-card-header:focus-visible {
+  background: var(--color-bg);
+  outline: 2px solid rgba(49, 96, 180, 0.18);
+  outline-offset: 1px;
 }
 
 .side-card h2,
 .side-card-header h2,
 .guide-card h2 {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.side-card-header h2 {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1;
+}
+
+.side-row-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  line-height: 1;
+}
+
+.side-row-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.side-row-plus {
+  font-size: 14px;
   font-weight: 800;
-  color: var(--color-primary);
 }
 
 .side-card-header span {
@@ -1808,12 +2305,48 @@ onBeforeUnmount(() => {
   color: var(--color-subtle);
 }
 
-.side-card-header button {
-  border: none;
-  background: transparent;
+.side-card-header .room-count {
+  margin-left: 8px;
+}
+
+.side-card-header h2 .side-row-icon {
+  color: var(--color-text);
+}
+
+.side-section-toggle {
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
   color: var(--color-subtle);
-  font-size: 12px;
-  padding: 0;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.35;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.side-card-header:hover .side-section-toggle,
+.side-card-header:focus-visible .side-section-toggle,
+.side-card-header[aria-expanded='true'] .side-section-toggle {
+  opacity: 1;
+}
+
+.side-card-header:hover .side-section-toggle,
+.side-card-header:focus-visible .side-section-toggle {
+  background: var(--color-bg);
+  color: var(--color-primary);
+}
+
+.side-section-chevron {
+  transition: transform 0.16s ease;
+}
+
+.side-section-chevron.collapsed {
+  transform: rotate(-90deg);
 }
 
 .room-loading,
@@ -1832,24 +2365,32 @@ onBeforeUnmount(() => {
   border: none;
   background: var(--color-primary-light);
   color: var(--color-white);
-  border-radius: 10px;
+  border-radius: 20px;
   padding: 10px 12px;
   font-size: 12.5px;
   font-weight: 800;
 }
 
 .room-list {
-  max-height: 326px;
+  max-height: 400px;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #c9d2e4 transparent;
 }
 
 .room-list::-webkit-scrollbar {
   width: 6px;
+}
+
+.room-list::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .room-list::-webkit-scrollbar-thumb {
@@ -1863,7 +2404,7 @@ onBeforeUnmount(() => {
 
 .room-item {
   width: 100%;
-  min-height: 58px;
+  min-height: 50px;
   border: 1px solid transparent;
   background: transparent;
   border-radius: 11px;
@@ -1883,18 +2424,30 @@ onBeforeUnmount(() => {
   background: var(--color-primary-soft);
 }
 
+.room-item.menu-open {
+  z-index: 20;
+}
+
 .room-select-body {
   flex: 1;
   min-width: 0;
-  padding: 23px 8px 8px 12px;
+  padding: 8px 72px 8px 12px;
   border-radius: 11px;
 }
 
 .room-actions {
   position: absolute;
-  top: 4px;
+  top: 50%;
   right: 6px;
-  z-index: 5;
+  transform: translateY(-50%);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.room-item.menu-open .room-actions {
+  z-index: 25;
 }
 
 .room-menu-button {
@@ -1932,6 +2485,7 @@ onBeforeUnmount(() => {
   position: absolute;
   bottom: 28px;
   right: 0;
+  z-index: 30;
   min-width: 128px;
   border: 1px solid var(--color-border);
   background: var(--color-white);
@@ -1976,17 +2530,16 @@ onBeforeUnmount(() => {
 }
 
 .room-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  min-width: 0;
 }
 
 .room-title-text {
   flex: 1;
   min-width: 0;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
@@ -1995,7 +2548,7 @@ onBeforeUnmount(() => {
 
 .room-item.active .room-title-text {
   color: var(--color-primary);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .room-title-input {
@@ -2017,25 +2570,21 @@ onBeforeUnmount(() => {
 }
 
 .room-time {
-  justify-self: end;
   font-size: 11px;
   line-height: 1;
   color: var(--color-placeholder);
   text-align: right;
-}
-
-.shortcut-card {
-  padding: 18px 18px 10px;
+  white-space: nowrap;
 }
 
 .shortcut-item {
-  width: calc(100% + 16px);
-  margin: 0 -8px;
+  width: calc(100% - 16px);
+  margin: 0 8px;
   border: none;
   border-bottom: 1px solid #f0f3f9;
   background: transparent;
   border-radius: 8px;
-  padding: 11px 8px;
+  padding: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2059,27 +2608,29 @@ onBeforeUnmount(() => {
   color: var(--color-orange);
 }
 
-.faq-card {
-  padding: 16px 14px;
+.faq-card .faq-title {
+  margin: 0;
 }
 
-.faq-card .faq-title {
-  margin: 0 0 12px 4px;
+.faq-card-header {
+  margin-bottom: 0;
 }
 
 .faq-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
+  padding: 0 10px;
 }
 
 .faq-list button {
   width: fit-content;
+  max-width: 100%;
   text-align: left;
   border: 1px solid #e9edf6;
   background: #f8fafd;
   border-radius: 999px;
-  padding: 9px 14px;
+  padding: 8px 12px;
   font-size: 12.5px;
   color: #4a5570;
 }
@@ -2136,6 +2687,10 @@ onBeforeUnmount(() => {
     radial-gradient(circle at 20% 0%, rgba(27, 67, 150, 0.16), transparent 34%),
     radial-gradient(circle at 90% 10%, rgba(18, 165, 222, 0.16), transparent 30%),
     linear-gradient(180deg, #f7faff 0%, #ffffff 62%);
+}
+
+.chat-main.mypage-mode {
+  background: transparent;
 }
 
 .start-screen {
@@ -2425,6 +2980,10 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 
+.message-content.has-agent-activity {
+  width: min(620px, 100%);
+}
+
 .message-tag {
   align-self: flex-start;
   font-size: 11px;
@@ -2445,6 +3004,117 @@ onBeforeUnmount(() => {
   line-height: 1.65;
   color: var(--color-text);
   white-space: normal;
+}
+
+.agent-status-bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  background: #ece8e1;
+  border: 1px solid #ded8ce;
+  border-radius: 4px 14px 14px 14px;
+  padding: 9px 13px;
+  color: #3b3f4a;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.agent-loop-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+}
+
+.agent-activity-card {
+  width: 100%;
+  overflow: hidden;
+  background: #e7e2da;
+  border: 1px solid #ddd7ce;
+  border-radius: 6px;
+  color: #3b3f4a;
+}
+
+.agent-activity-summary,
+.agent-activity-header {
+  width: 100%;
+  min-height: 36px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 13px;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-activity-summary:hover,
+.agent-activity-header:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.agent-activity-summary:focus-visible,
+.agent-activity-header:focus-visible {
+  outline: 2px solid rgba(49, 96, 180, 0.24);
+  outline-offset: -2px;
+}
+
+.agent-activity-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+}
+
+.agent-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+
+.agent-step {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+}
+
+.agent-step-icon {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.agent-step-body {
+  min-width: 0;
+}
+
+.agent-step-body p {
+  margin: 0;
+  color: #383d48;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.agent-step-body span {
+  display: inline-flex;
+  margin-top: 5px;
+  max-width: 100%;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  padding: 3px 8px;
+  color: #535966;
+  font-size: 11.5px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .assistant-bubble.loading-answer {
@@ -3042,7 +3712,7 @@ onBeforeUnmount(() => {
   }
 
   .chat-body {
-    padding: 14px;
+    padding: 14px 14px 14px 0;
     gap: 14px;
   }
 
@@ -3130,7 +3800,7 @@ onBeforeUnmount(() => {
     padding: 15px 14px;
   }
   .chat-body {
-    padding: 10px;
+    padding: 10px 10px 10px 0;
     gap: 10px;
   }
 

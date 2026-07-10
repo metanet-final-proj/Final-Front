@@ -36,6 +36,129 @@ const getStatusText = (parsed) => {
   return null
 }
 
+const AGENT_STAGE_TITLES = {
+  planning: '요청을 분석하고 계획을 세우는 중',
+  generating: '답변 생성을 준비하는 중',
+}
+
+const createAgentActivity = (currentText = ASSISTANT_LOADING_TEXT) => ({
+  currentText,
+  collapsed: false,
+  steps: [],
+})
+
+const completeAgentActivity = (activity) => {
+  if (!activity) return null
+
+  return {
+    ...activity,
+    collapsed: true,
+    steps: activity.steps.map((step) => ({
+      ...step,
+      status: 'done',
+    })),
+  }
+}
+
+const updateAgentStep = (activity, nextStep) => {
+  const steps = activity.steps || []
+  const exists = steps.some((step) => step.id === nextStep.id)
+
+  if (exists) {
+    return {
+      ...activity,
+      steps: steps.map((step) =>
+        step.id === nextStep.id
+          ? step.status === 'done' && nextStep.status !== 'done'
+            ? step
+            : {
+                ...step,
+                ...nextStep,
+              }
+          : step,
+      ),
+    }
+  }
+
+  return {
+    ...activity,
+    steps: [...steps, nextStep],
+  }
+}
+
+const updateAgentActivityFromEvent = (activity, parsed) => {
+  const statusText = getStatusText(parsed)
+
+  if (!statusText) return activity
+
+  const baseActivity = activity || createAgentActivity(statusText)
+  const data = parsed.data || {}
+
+  if (parsed.event === 'status') {
+    const stage = data.stage || 'status'
+    const nextStep = {
+      id: `status-${stage}`,
+      type: 'status',
+      title: data.message || AGENT_STAGE_TITLES[stage] || statusText,
+      status: stage === 'generating' ? 'running' : 'done',
+    }
+    const completedSteps = (baseActivity.steps || []).map((step) =>
+      step.status === 'running'
+        ? {
+            ...step,
+            status: 'done',
+          }
+        : step,
+    )
+
+    return updateAgentStep(
+      {
+        ...baseActivity,
+        currentText: statusText,
+        collapsed: false,
+        steps: completedSteps,
+      },
+      nextStep,
+    )
+  }
+
+  if (parsed.event === 'progress') {
+    const stage = data.stage || 'progress'
+    const tool = data.tool || data.name || null
+    const isToolEnd = stage === 'tool_end'
+    const stepId = tool ? `tool-${tool}` : `progress-${stage}`
+    const completedSteps = (baseActivity.steps || []).map((step) =>
+      step.status === 'running' && step.id !== stepId
+        ? {
+            ...step,
+            status: 'done',
+          }
+        : step,
+    )
+
+    return updateAgentStep(
+      {
+        ...baseActivity,
+        currentText: statusText,
+        collapsed: false,
+        steps: completedSteps,
+      },
+      {
+        id: stepId,
+        type: tool ? 'tool' : 'progress',
+        tool,
+        title: statusText,
+        status: isToolEnd ? 'done' : 'running',
+      },
+    )
+  }
+
+  return {
+    ...baseActivity,
+    currentText: statusText,
+  }
+}
+
 const formatKoreanTime = (value) => {
   if (!value) return nowTime()
 
@@ -102,6 +225,7 @@ const normalizeMessage = (message) => {
     text: content,
     content,
     tag: message.tag || null,
+    agentActivity: message.agentActivity || null,
     createdAt,
     time: formatKoreanTime(createdAt),
     isLocal: false,
@@ -415,9 +539,16 @@ export const useChatStore = defineStore('chat', {
 
       this.messagesByConversationId = {
         ...this.messagesByConversationId,
-        [key]: currentMessages.map((message) =>
-          message.id === localMessageId ? normalized : message,
-        ),
+        [key]: currentMessages.map((message) => {
+          if (message.id !== localMessageId) {
+            return message
+          }
+
+          return {
+            ...normalized,
+            agentActivity: normalized.agentActivity || message.agentActivity || null,
+          }
+        }),
       }
     },
 
@@ -503,10 +634,12 @@ export const useChatStore = defineStore('chat', {
         createdAt: new Date().toISOString(),
         isLocal: true,
         isLoading: true,
+        agentActivity: createAgentActivity(),
       }
 
       let hasReceivedFirstChunk = false
       let hasReceivedAssistantMessage = false
+      let agentActivity = localAssistantMessage.agentActivity
 
       this.appendLocalMessage(conversationId, localUserMessage)
       this.appendLocalMessage(conversationId, localAssistantMessage)
@@ -526,11 +659,13 @@ export const useChatStore = defineStore('chat', {
           
             if (!hasReceivedFirstChunk) {
               hasReceivedFirstChunk = true
+              agentActivity = completeAgentActivity(agentActivity)
           
               this.patchLocalMessage(conversationId, localAssistantMessageId, {
                 text: chunk,
                 content: chunk,
                 isLoading: false,
+                agentActivity,
               })
           
               return
@@ -545,10 +680,14 @@ export const useChatStore = defineStore('chat', {
 
           onAssistantMessage: (data) => {
             hasReceivedAssistantMessage = true
+            agentActivity = completeAgentActivity(agentActivity)
             this.replaceLocalMessage(
               conversationId,
               localAssistantMessageId,
-              data,
+              {
+                ...data,
+                agentActivity,
+              },
             )
           },
 
@@ -561,10 +700,12 @@ export const useChatStore = defineStore('chat', {
 
             const statusText = getStatusText(parsed)
             if (!statusText) return
+            agentActivity = updateAgentActivityFromEvent(agentActivity, parsed)
 
             this.patchLocalMessage(conversationId, localAssistantMessageId, {
               text: statusText,
               content: statusText,
+              agentActivity,
             })
           },      
         })
@@ -574,6 +715,7 @@ export const useChatStore = defineStore('chat', {
             text: ASSISTANT_FAILURE_TEXT,
             content: ASSISTANT_FAILURE_TEXT,
             isLoading: false,
+            agentActivity: completeAgentActivity(agentActivity),
           })
         }
 
@@ -589,6 +731,7 @@ export const useChatStore = defineStore('chat', {
           text: ASSISTANT_FAILURE_TEXT,
           content: ASSISTANT_FAILURE_TEXT,
           isLoading: false,
+          agentActivity: completeAgentActivity(agentActivity),
         })
 
         throw error
