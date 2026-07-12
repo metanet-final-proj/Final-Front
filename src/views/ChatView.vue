@@ -60,6 +60,7 @@ const profileMenuOpen = ref(false)
 const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
 const composingNewChat = ref(true)
+const isDarkMode = ref(false)
 const isRecording = ref(false)
 const isTranscribing = ref(false)
 const isVoiceSupported = typeof window !== 'undefined' &&
@@ -805,6 +806,10 @@ const toggleProfileMenu = () => {
   profileMenuOpen.value = !profileMenuOpen.value
 }
 
+const toggleDarkMode = () => {
+  isDarkMode.value = !isDarkMode.value
+}
+
 const openMyPage = () => {
   mainPanel.value = MAIN_PANEL.MYPAGE
   profileMenuOpen.value = false
@@ -899,10 +904,49 @@ onBeforeUnmount(() => {
   <div class="chat-shell page">
     <header class="app-header">
       <div class="header-actions">
-        <div class="system-badge">
-          <span></span>
-          시스템 정상
-        </div>
+        <button
+          class="theme-toggle-button"
+          :class="{ dark: isDarkMode }"
+          type="button"
+          :aria-pressed="isDarkMode"
+          :aria-label="isDarkMode ? '라이트 모드로 변경' : '다크 모드로 변경'"
+          @click="toggleDarkMode"
+        >
+          <span class="theme-toggle-knob" aria-hidden="true">
+            <svg
+              v-if="isDarkMode"
+              width="16"
+              height="16"
+              viewBox="0 0 30 30"
+              fill="none"
+            >
+              <path
+                d="M18.8 22.8C12.8 22.8 8 18 8 12c0-2.1.6-4 1.6-5.7A9.9 9.9 0 1 0 23.7 20.4c-1.5 1.5-3.5 2.4-4.9 2.4Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+              <path d="M21.8 5.8l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7.7-1.7Z" fill="currentColor" />
+              <path d="M25 12.8l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5.5-1.2Z" fill="currentColor" />
+            </svg>
+
+            <svg
+              v-else
+              width="17"
+              height="17"
+              viewBox="0 0 32 32"
+              fill="none"
+            >
+              <circle cx="16" cy="16" r="6.5" stroke="currentColor" stroke-width="2" />
+              <path
+                d="M16 3.5v4M16 24.5v4M3.5 16h4M24.5 16h4M7.2 7.2l2.8 2.8M22 22l2.8 2.8M24.8 7.2 22 10M10 22l-2.8 2.8"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
+        </button>
       </div>
     </header>
 
@@ -1776,24 +1820,51 @@ onBeforeUnmount(() => {
   gap: 18px;
 }
 
-.system-badge {
+.theme-toggle-button {
+  width: 54px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-disabled);
+  color: var(--color-text);
+  padding: 3px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  background: var(--color-success-bg);
-  border: 1px solid var(--color-success-border);
-  border-radius: 999px;
-  padding: 5px 12px;
+  justify-content: flex-start;
+  box-shadow: 0 8px 18px rgba(var(--color-primary-rgb), 0.08);
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
 }
 
-.system-badge span {
-  width: 8px;
-  height: 8px;
+.theme-toggle-button.dark {
+  background: var(--color-markdown-pre-bg);
+  color: var(--color-white);
+  border-color: var(--color-markdown-pre-bg);
+}
+
+.theme-toggle-knob {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   border-radius: 50%;
-  background: var(--color-green);
-  animation: tanetPulse 2.4s ease-in-out infinite;
+  background: var(--color-white);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(var(--color-primary-rgb), 0.12);
+  transform: translateX(0);
+  transition:
+    transform 0.18s ease,
+    color 0.18s ease;
+}
+
+.theme-toggle-button.dark .theme-toggle-knob {
+  color: var(--color-markdown-pre-bg);
+  transform: translateX(26px);
 }
 
 .profile-area {
@@ -3738,8 +3809,19 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  .system-badge {
-    display: none;
+  .theme-toggle-button {
+    width: 50px;
+    height: 26px;
+  }
+
+  .theme-toggle-knob {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
+  }
+
+  .theme-toggle-button.dark .theme-toggle-knob {
+    transform: translateX(24px);
   }
 
   .profile-summary strong,
