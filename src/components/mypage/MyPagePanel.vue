@@ -121,7 +121,6 @@ const selectedRange = ref(chartRanges[0])
             <span>Token Usage</span>
             <h2>토큰 사용량 그래프</h2>
           </div>
-          <strong>Line plot</strong>
         </div>
 
         <div class="chart-stage">
@@ -138,7 +137,6 @@ const selectedRange = ref(chartRanges[0])
             <span>Total Request</span>
             <h2>요청량 그래프</h2>
           </div>
-          <strong>Bar plot</strong>
         </div>
 
         <div class="chart-stage">
@@ -369,16 +367,6 @@ const selectedRange = ref(chartRanges[0])
   color: var(--color-text);
   font-size: 16px;
   font-weight: 800;
-}
-
-.chart-card-header strong {
-  flex-shrink: 0;
-  border: 1px solid rgba(201, 210, 228, 0.75);
-  background: #f4f8ff;
-  border-radius: 999px;
-  padding: 6px 10px;
-  color: var(--color-primary-light);
-  font-size: 11.5px;
 }
 
 .chart-stage {

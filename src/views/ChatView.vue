@@ -13,6 +13,7 @@ import DOMPurify from 'dompurify'
 import officeLinkTitle from '../assets/images/officelink-logo-title-wide-nobg.svg'
 import { useWorkhubStore } from '../stores/workhubStore'
 import { speechApi } from '../api/speechApi'
+import AdminDashboardPanel from '../components/admin/AdminDashboardPanel.vue'
 import MyPagePanel from '../components/mypage/MyPagePanel.vue'
 
 const router = useRouter()
@@ -40,6 +41,7 @@ const renderMarkdown = (text) => {
 
 const MAIN_PANEL = {
   CHAT: 'chat',
+  ADMIN: 'admin',
   MYPAGE: 'mypage',
 }
 
@@ -810,6 +812,13 @@ const openMyPage = () => {
   roomActionMenuId.value = null
 }
 
+const openAdminDashboard = () => {
+  mainPanel.value = MAIN_PANEL.ADMIN
+  profileMenuOpen.value = false
+  panelKey.value = null
+  roomActionMenuId.value = null
+}
+
 const handleLogout = async () => {
   if (logoutLoading.value) return
 
@@ -1318,6 +1327,14 @@ onBeforeUnmount(() => {
             </div>
 
             <button
+              class="mypage-button admin-dashboard-button"
+              type="button"
+              @click="openAdminDashboard"
+            >
+              관리자 대시보드
+            </button>
+
+            <button
               class="mypage-button"
               type="button"
               @click="openMyPage"
@@ -1341,11 +1358,14 @@ onBeforeUnmount(() => {
         class="chat-main"
         :class="{
           'start-mode': mainPanel === MAIN_PANEL.CHAT && showWelcome,
+          'admin-mode': mainPanel === MAIN_PANEL.ADMIN,
           'mypage-mode': mainPanel === MAIN_PANEL.MYPAGE,
         }"
       >
+  <AdminDashboardPanel v-if="mainPanel === MAIN_PANEL.ADMIN" />
+
   <MyPagePanel
-    v-if="mainPanel === MAIN_PANEL.MYPAGE"
+    v-else-if="mainPanel === MAIN_PANEL.MYPAGE"
     :user="authStore.user"
     :profile="authStore.employeeProfile"
   />
@@ -1922,8 +1942,18 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
+.admin-dashboard-button {
+  border-color: #c9d9f3;
+  background: #f6f9ff;
+  color: var(--color-primary);
+}
+
 .mypage-button:hover {
   background: var(--color-bg);
+}
+
+.admin-dashboard-button:hover {
+  background: #eaf2ff;
 }
 
 .logout-button:hover {
@@ -2691,6 +2721,10 @@ onBeforeUnmount(() => {
 
 .chat-main.mypage-mode {
   background: transparent;
+}
+
+.chat-main.admin-mode {
+  background: #f7faff;
 }
 
 .start-screen {
