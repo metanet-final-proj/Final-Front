@@ -3000,8 +3000,9 @@ onBeforeUnmount(() => {
   border: 1px solid var(--color-border);
   border-radius: 4px 16px 16px 16px;
   padding: 13px 16px;
-  font-size: 13.5px;
-  line-height: 1.65;
+  font-size: 14.5px;
+  line-height: 1.6;
+  font-weight: 400;
   color: var(--color-text);
   white-space: normal;
 }
@@ -3157,7 +3158,7 @@ onBeforeUnmount(() => {
 }
 
 .markdown-content :deep(strong) {
-  font-weight: 800;
+  font-weight: 700;
   color: var(--color-text);
 }
 
@@ -3305,8 +3306,9 @@ onBeforeUnmount(() => {
   color: var(--color-white);
   border-radius: 16px 4px 16px 16px;
   padding: 11px 16px;
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: 14.5px;
+  line-height: 1.6;
+  font-weight: 400;
   white-space: pre-line;
   word-break: keep-all;
   overflow-wrap: break-word;
@@ -3351,8 +3353,8 @@ onBeforeUnmount(() => {
   outline: none;
   background: transparent;
   color: var(--color-text);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 15px;
+  line-height: 22px;
   padding: 6px 0 14px;
   resize: none;
   overflow-y: auto;
