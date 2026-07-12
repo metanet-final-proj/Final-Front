@@ -27,6 +27,28 @@ const markdown = new MarkdownIt({
   breaks: true,
 })
 
+const THEME_STORAGE_KEY = 'officeLinkTheme'
+
+const getInitialDarkMode = () => {
+  if (typeof window === 'undefined') return false
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+
+  if (storedTheme === 'dark') return true
+  if (storedTheme === 'light') return false
+
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches || false
+}
+
+const applyTheme = (darkMode) => {
+  if (typeof document === 'undefined') return
+
+  const theme = darkMode ? 'dark' : 'light'
+
+  document.documentElement.dataset.theme = theme
+  window.localStorage.setItem(THEME_STORAGE_KEY, theme)
+}
+
 const renderMarkdown = (text) => {
   if (!text) return ''
 
@@ -60,7 +82,7 @@ const profileMenuOpen = ref(false)
 const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
 const composingNewChat = ref(true)
-const isDarkMode = ref(false)
+const isDarkMode = ref(getInitialDarkMode())
 const isRecording = ref(false)
 const isTranscribing = ref(false)
 const isVoiceSupported = typeof window !== 'undefined' &&
@@ -854,7 +876,13 @@ watch(
   },
 )
 
+watch(isDarkMode, (nextValue) => {
+  applyTheme(nextValue)
+})
+
 onMounted(async () => {
+  applyTheme(isDarkMode.value)
+
   const hasUserContext = await ensureUserContext()
 
   if (!hasUserContext) return
@@ -1780,7 +1808,7 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   position: relative;
   z-index: 5;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
@@ -1849,7 +1877,7 @@ onBeforeUnmount(() => {
   height: 20px;
   flex: 0 0 20px;
   border-radius: 50%;
-  background: var(--color-white);
+  background: var(--color-toggle-knob);
   color: var(--color-text);
   border: 1px solid var(--color-border);
   display: flex;
@@ -1940,7 +1968,7 @@ onBeforeUnmount(() => {
   top: 48px;
   right: 0;
   width: 270px;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   border-radius: 14px;
   box-shadow: 0 18px 40px rgba(var(--color-primary-rgb), 0.14);
@@ -2004,7 +2032,7 @@ onBeforeUnmount(() => {
   width: 100%;
   margin-top: 10px;
   border: 1px solid var(--color-border);
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   color: var(--color-text);
   border-radius: 10px;
   padding: 11px 12px;
@@ -2056,10 +2084,10 @@ onBeforeUnmount(() => {
   margin-top: -68px;
   position: relative;
   z-index: 10;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   box-shadow:
-    -100vw 0 0 100vw var(--color-white),
-    inset -1px 0 0 rgba(var(--color-white-rgb), 1);
+    -100vw 0 0 100vw var(--color-surface-raised),
+    inset -1px 0 0 var(--color-border-light);
   display: flex;
   flex-direction: column;
   overflow: visible;
@@ -2180,7 +2208,7 @@ onBeforeUnmount(() => {
   height: 36px;
   flex-shrink: 0;
   border: 1px solid var(--color-border);
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border-radius: 11px;
   display: flex;
   align-items: center;
@@ -2251,7 +2279,7 @@ onBeforeUnmount(() => {
   position: relative;
   width: 100%;
   flex-shrink: 0;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border-top: 1px solid rgba(var(--color-white-rgb), 0.9);
   padding: 10px 14px 8px 0;
   z-index: 50;
@@ -2260,7 +2288,7 @@ onBeforeUnmount(() => {
 .sidebar-profile-box {
   width: 100%;
   min-width: 0;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   justify-content: flex-start;
   padding: 8px 10px;
@@ -2312,7 +2340,7 @@ onBeforeUnmount(() => {
 .side-card,
 .guide-card {
   flex-shrink: 0;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border: none;
   border-radius: var(--radius-lg);
 }
@@ -2589,7 +2617,7 @@ onBeforeUnmount(() => {
   z-index: 30;
   min-width: 128px;
   border: 1px solid var(--color-border);
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border-radius: 10px;
   padding: 6px;
   box-shadow: 0 12px 28px rgba(var(--color-primary-rgb), 0.14);
@@ -2657,7 +2685,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   height: 26px;
   border: 1px solid var(--color-primary-light);
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   color: var(--color-text);
   border-radius: 7px;
   padding: 0 8px;
@@ -2774,7 +2802,7 @@ onBeforeUnmount(() => {
 .chat-main {
   flex: 1;
   min-width: 0;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   display: flex;
@@ -2787,7 +2815,7 @@ onBeforeUnmount(() => {
   background:
     radial-gradient(circle at 20% 0%, rgba(var(--color-primary-light-rgb), 0.16), transparent 34%),
     radial-gradient(circle at 90% 10%, rgba(var(--color-sky-rgb), 0.16), transparent 30%),
-    linear-gradient(180deg, var(--color-page-gradient-start) 0%, var(--color-white) 62%);
+    linear-gradient(180deg, var(--color-page-gradient-start) 0%, var(--color-surface-raised) 62%);
 }
 
 .chat-main.mypage-mode {
@@ -3056,7 +3084,7 @@ onBeforeUnmount(() => {
   align-self: center;
   font-size: 12px;
   color: var(--color-subtle);
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border-light);
   border-radius: 999px;
   padding: 6px 12px;
@@ -3101,7 +3129,7 @@ onBeforeUnmount(() => {
 }
 
 .assistant-bubble {
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   border-radius: 4px 16px 16px 16px;
   padding: 13px 16px;
@@ -3427,7 +3455,7 @@ onBeforeUnmount(() => {
 .composer-area {
   padding: 16px 24px 12px;
   border-top: 1px solid var(--color-border-light);
-  background: var(--color-white);
+  background: var(--color-surface-raised);
 }
 
 .composer-box {
@@ -3562,7 +3590,7 @@ onBeforeUnmount(() => {
 .detail-panel {
   width: 336px;
   flex-shrink: 0;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   display: flex;

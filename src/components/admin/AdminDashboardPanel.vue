@@ -291,7 +291,7 @@ onMounted(() => {
       datasets: [
         {
           data: [68, 32],
-          backgroundColor: ['#1b4396', '#d9e4f6'],
+          backgroundColor: ['#1b4396', 'var(--color-primary-border-muted)'],
           borderWidth: 0,
           hoverOffset: 4,
         },
@@ -598,9 +598,9 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   background:
-    radial-gradient(circle at 16% 0%, rgba(27, 67, 150, 0.16), transparent 34%),
-    radial-gradient(circle at 88% 8%, rgba(18, 165, 222, 0.16), transparent 30%),
-    linear-gradient(180deg, #f7faff 0%, #ffffff 62%);
+    radial-gradient(circle at 16% 0%, rgba(var(--color-primary-light-rgb), 0.16), transparent 34%),
+    radial-gradient(circle at 88% 8%, rgba(var(--color-sky-rgb), 0.16), transparent 30%),
+    linear-gradient(180deg, var(--color-page-gradient-start) 0%, var(--color-surface-raised) 62%);
   padding: 32px 36px 36px;
 }
 
@@ -638,10 +638,10 @@ onBeforeUnmount(() => {
   grid-column: 5 / 13;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  border: 1px solid rgba(227, 232, 242, 0.85);
+  border: 1px solid rgba(var(--color-border-muted-rgb), 0.85);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 20px 48px rgba(23, 48, 110, 0.08);
+  background: rgba(var(--color-white-rgb), 0.88);
+  box-shadow: 0 20px 48px rgba(var(--color-primary-rgb), 0.08);
   backdrop-filter: blur(12px);
 }
 
@@ -685,11 +685,11 @@ onBeforeUnmount(() => {
   grid-column: 11 / 13;
   justify-self: end;
   min-width: 238px;
-  border: 1px solid rgba(227, 232, 242, 0.85);
-  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(var(--color-border-muted-rgb), 0.85);
+  background: rgba(var(--color-white-rgb), 0.84);
   border-radius: 999px;
   padding: 5px 6px 5px 14px;
-  box-shadow: 0 16px 34px rgba(23, 48, 110, 0.07);
+  box-shadow: 0 16px 34px rgba(var(--color-primary-rgb), 0.07);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -701,7 +701,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 3px;
   border-radius: 999px;
-  background: #eef3fb;
+  background: var(--color-surface-muted);
   padding: 3px;
 }
 
@@ -718,23 +718,23 @@ onBeforeUnmount(() => {
 
 .range-toggle-buttons button:hover {
   color: var(--color-primary-light);
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(var(--color-white-rgb), 0.66);
 }
 
 .range-toggle-buttons button.active {
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   color: var(--color-primary);
-  box-shadow: 0 6px 14px rgba(23, 48, 110, 0.12);
+  box-shadow: 0 6px 14px rgba(var(--color-primary-rgb), 0.12);
 }
 
 .dashboard-card {
   min-width: 0;
   min-height: 216px;
   padding: 18px;
-  border: 1px solid rgba(227, 232, 242, 0.88);
+  border: 1px solid rgba(var(--color-border-muted-rgb), 0.88);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 24px 60px rgba(23, 48, 110, 0.09);
+  background: rgba(var(--color-white-rgb), 0.9);
+  box-shadow: 0 24px 60px rgba(var(--color-primary-rgb), 0.09);
   backdrop-filter: blur(12px);
   display: flex;
   flex-direction: column;
@@ -786,9 +786,9 @@ onBeforeUnmount(() => {
 .card-header button {
   flex-shrink: 0;
   min-height: 26px;
-  border: 1px solid #d9e4f6;
+  border: 1px solid var(--color-primary-border-muted);
   border-radius: 999px;
-  background: #f4f8ff;
+  background: var(--color-surface-grid);
   color: var(--color-primary-light);
   padding: 5px 9px;
   font-size: 11.5px;
@@ -837,7 +837,7 @@ onBeforeUnmount(() => {
 }
 
 .log-table-wrap th {
-  background: #f6f9ff;
+  background: var(--color-surface-soft);
   color: var(--color-muted);
   font-size: 11.5px;
   font-weight: 800;
@@ -865,10 +865,10 @@ onBeforeUnmount(() => {
 .auth-log-modal {
   width: min(1080px, 100%);
   max-height: min(760px, calc(100vh - 64px));
-  border: 1px solid rgba(227, 232, 242, 0.92);
+  border: 1px solid rgba(var(--color-border-muted-rgb), 0.92);
   border-radius: 10px;
-  background: var(--color-white);
-  box-shadow: 0 30px 80px rgba(23, 48, 110, 0.24);
+  background: var(--color-surface-raised);
+  box-shadow: 0 30px 80px rgba(var(--color-primary-rgb), 0.24);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -901,7 +901,7 @@ onBeforeUnmount(() => {
   height: 32px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   color: var(--color-muted);
   font-size: 20px;
   line-height: 1;
@@ -932,7 +932,7 @@ onBeforeUnmount(() => {
   height: 36px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #f8fafd;
+  background: var(--color-surface-subtle);
   color: var(--color-text);
   padding: 0 12px;
   font-size: 13px;
@@ -941,7 +941,7 @@ onBeforeUnmount(() => {
 .auth-log-filter input:focus {
   outline: none;
   border-color: var(--color-primary-light);
-  background: var(--color-white);
+  background: var(--color-surface-raised);
 }
 
 .auth-log-modal-table-wrap {
@@ -970,7 +970,7 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: #f6f9ff;
+  background: var(--color-surface-soft);
   color: var(--color-muted);
   font-size: 12px;
   font-weight: 800;
@@ -1000,7 +1000,7 @@ onBeforeUnmount(() => {
   height: 32px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   color: var(--color-muted);
   font-size: 13px;
   font-weight: 800;
