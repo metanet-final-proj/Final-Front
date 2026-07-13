@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import chatbotLogo from '../assets/images/officelink-logo.svg'
 import chatbotLogo2 from '../assets/images/officelink-logo-nobg.svg'
 import loopIcon from '../assets/images/loop.svg'
@@ -17,6 +17,7 @@ import AdminDashboardPanel from '../components/admin/AdminDashboardPanel.vue'
 import MyPagePanel from '../components/mypage/MyPagePanel.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 const workhubStore = useWorkhubStore()
@@ -65,6 +66,51 @@ const MAIN_PANEL = {
   CHAT: 'chat',
   ADMIN: 'admin',
   MYPAGE: 'mypage',
+}
+
+const PANEL_QUERY_VALUES = new Set(Object.values(MAIN_PANEL))
+
+const getPanelFromQuery = (panelQuery) => {
+  const rawPanel = Array.isArray(panelQuery) ? panelQuery[0] : panelQuery
+  const normalizedPanel = String(rawPanel || '').toLowerCase()
+
+  return PANEL_QUERY_VALUES.has(normalizedPanel) ? normalizedPanel : MAIN_PANEL.CHAT
+}
+
+const replacePanelQuery = async (panel) => {
+  const nextQuery = { ...route.query }
+
+  if (panel === MAIN_PANEL.CHAT) {
+    delete nextQuery.panel
+  } else {
+    nextQuery.panel = panel
+  }
+
+  const currentPanel = getPanelFromQuery(route.query.panel)
+  if (currentPanel === panel) return
+
+  await router.replace({
+    path: '/chat',
+    query: nextQuery,
+  })
+}
+
+const pushPanelQuery = async (panel) => {
+  const nextQuery = { ...route.query }
+
+  if (panel === MAIN_PANEL.CHAT) {
+    delete nextQuery.panel
+  } else {
+    nextQuery.panel = panel
+  }
+
+  const currentPanel = getPanelFromQuery(route.query.panel)
+  if (currentPanel === panel) return
+
+  await router.push({
+    path: '/chat',
+    query: nextQuery,
+  })
 }
 
 const draft = ref('')
@@ -128,20 +174,20 @@ watch(
 
 const faqs = [
   {
-    label: '회의실 예약 및 변경/취소 방법 ›',
-    query: '회의실 예약 및 변경/취소 방법 알려줘',
+    label: '회의실 예약하기 ›',
+    query: '내일 오후 2시부터 3시까지 6명이 사용할 수 있는 회의실 예약하고 싶어',
   },
   {
-    label: '방문객 주차 등록은 언제까지 가능한가요? ›',
-    query: '방문객 주차 등록은 언제까지 가능해?',
+    label: '방문객 주차 등록하기 ›',
+    query: '방문객 주차 등록하고 싶어',
   },
   {
-    label: '구내식당 운영시간은 어떻게 되나요? ›',
-    query: '구내식당 운영시간 알려줘',
+    label: '오늘 구내식당 메뉴 보기 ›',
+    query: '오늘 모든 식당의 아침 점심 저녁 메뉴 알려줘',
   },
   {
-    label: '비품은 얼마나 걸려서 받을 수 있나요? ›',
-    query: '비품은 얼마나 걸려서 받을 수 있어?',
+    label: '비품 신청 현황 확인하기 ›',
+    query: '내 비품 신청 현황 보여줘',
   },
 ]
 
@@ -551,6 +597,7 @@ const requestScrollThread = () => {
 
 const selectRoom = async (roomId) => {
   mainPanel.value = MAIN_PANEL.CHAT
+  await replacePanelQuery(MAIN_PANEL.CHAT)
   composingNewChat.value = false
   roomActionMenuId.value = null
   chatStore.setActiveConversation(roomId)
@@ -576,6 +623,7 @@ const sendMessage = async (text = draft.value) => {
 
   if (!messageText || isAnswering.value || isTranscribing.value) return
   mainPanel.value = MAIN_PANEL.CHAT
+  await replacePanelQuery(MAIN_PANEL.CHAT)
 
   let conversationId
 
@@ -636,6 +684,7 @@ const handleComposerKeydown = (event) => {
 
 const createNewChat = async (initialTitle = '') => {
   mainPanel.value = MAIN_PANEL.CHAT
+  await replacePanelQuery(MAIN_PANEL.CHAT)
   const titleText = typeof initialTitle === 'string' ? initialTitle.trim() : ''
 
   if (!titleText) {
@@ -845,6 +894,7 @@ const openMyPage = () => {
   profileMenuOpen.value = false
   panelKey.value = null
   roomActionMenuId.value = null
+  pushPanelQuery(MAIN_PANEL.MYPAGE)
 }
 
 const openAdminDashboard = () => {
@@ -852,6 +902,7 @@ const openAdminDashboard = () => {
   profileMenuOpen.value = false
   panelKey.value = null
   roomActionMenuId.value = null
+  pushPanelQuery(MAIN_PANEL.ADMIN)
 }
 
 const handleLogout = async () => {
@@ -887,6 +938,23 @@ watch(
 watch(isDarkMode, (nextValue) => {
   applyTheme(nextValue)
 })
+
+watch(
+  () => route.query.panel,
+  (panelQuery) => {
+    const nextPanel = getPanelFromQuery(panelQuery)
+    mainPanel.value = nextPanel
+
+    if (nextPanel !== MAIN_PANEL.CHAT) {
+      profileMenuOpen.value = false
+      panelKey.value = null
+      roomActionMenuId.value = null
+    }
+  },
+  {
+    immediate: true,
+  },
+)
 
 onMounted(async () => {
   applyTheme(isDarkMode.value)
@@ -1197,7 +1265,7 @@ onBeforeUnmount(() => {
                 :key="faq.label"
                 type="button"
                 :disabled="isAnswering"
-                @click="sendMessage(faq.query)"
+                @click="fillDraftFromStarter(faq.query)"
               >
                 {{ faq.label }}
               </button>

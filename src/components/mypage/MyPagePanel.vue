@@ -1,5 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue'
+import Chart from 'chart.js/auto'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { myUsageApi } from '../../api/myUsageApi'
 
 const props = defineProps({
   user: {
@@ -22,13 +24,176 @@ const officeLocation = computed(() => props.profile?.officeLocation || '오피�
 
 const hireDate = computed(() => {
   if (!props.profile?.employeeHireDate) return '입사일 정보 없음'
-
   return String(props.profile.employeeHireDate)
 })
 
 const initial = computed(() => displayName.value.slice(0, 1))
-const chartRanges = ['24H', '7', '14', '30']
-const selectedRange = ref(chartRanges[0])
+const chartRanges = [
+  { label: '24H', value: '24h' },
+  { label: '7', value: '7d' },
+  { label: '14', value: '14d' },
+  { label: '30', value: '30d' },
+]
+const selectedRange = ref(chartRanges[1].value)
+const monthlySummary = ref({
+  totalTokens: 0,
+  chatRequestCount: 0,
+})
+const usageTrend = ref({
+  points: [],
+})
+const summaryLoading = ref(false)
+const trendLoading = ref(false)
+const usageError = ref(null)
+const tokenCanvas = ref(null)
+const requestCanvas = ref(null)
+let tokenChart = null
+let requestChart = null
+
+const formatNumber = (value) => {
+  return new Intl.NumberFormat('ko-KR').format(Number(value || 0))
+}
+
+const chartLabels = computed(() => usageTrend.value?.points?.map((point) => point.label) || [])
+const tokenValues = computed(() => usageTrend.value?.points?.map((point) => point.totalTokens || 0) || [])
+const requestValues = computed(() => usageTrend.value?.points?.map((point) => point.chatRequestCount || 0) || [])
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      display: false,
+    },
+    tooltip: {
+      displayColors: false,
+    },
+  },
+  scales: {
+    x: {
+      grid: {
+        display: false,
+      },
+      ticks: {
+        color: '#7b8498',
+        maxRotation: 0,
+      },
+    },
+    y: {
+      beginAtZero: true,
+      grid: {
+        color: 'rgba(138, 148, 172, 0.18)',
+      },
+      ticks: {
+        color: '#7b8498',
+        precision: 0,
+      },
+    },
+  },
+}
+
+const destroyCharts = () => {
+  tokenChart?.destroy()
+  requestChart?.destroy()
+  tokenChart = null
+  requestChart = null
+}
+
+const renderCharts = async () => {
+  await nextTick()
+
+  if (!tokenCanvas.value || !requestCanvas.value) return
+
+  destroyCharts()
+
+  tokenChart = new Chart(tokenCanvas.value, {
+    type: 'line',
+    data: {
+      labels: chartLabels.value,
+      datasets: [
+        {
+          data: tokenValues.value,
+          borderColor: '#4f6df5',
+          backgroundColor: 'rgba(79, 109, 245, 0.14)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.35,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        },
+      ],
+    },
+    options: chartOptions,
+  })
+
+  requestChart = new Chart(requestCanvas.value, {
+    type: 'bar',
+    data: {
+      labels: chartLabels.value,
+      datasets: [
+        {
+          data: requestValues.value,
+          backgroundColor: 'rgba(47, 183, 132, 0.72)',
+          borderColor: '#2fb784',
+          borderWidth: 1,
+          borderRadius: 8,
+          maxBarThickness: 28,
+        },
+      ],
+    },
+    options: chartOptions,
+  })
+}
+
+const fetchMonthlySummary = async () => {
+  summaryLoading.value = true
+
+  try {
+    const response = await myUsageApi.getMonthlySummary()
+    monthlySummary.value = response.data || {
+      totalTokens: 0,
+      chatRequestCount: 0,
+    }
+  } catch (error) {
+    usageError.value = error
+    console.error('Failed to fetch my monthly usage summary:', error)
+  } finally {
+    summaryLoading.value = false
+  }
+}
+
+const fetchUsageTrend = async () => {
+  trendLoading.value = true
+  usageError.value = null
+
+  try {
+    const response = await myUsageApi.getUsageTrends(selectedRange.value)
+    usageTrend.value = response.data || {
+      points: [],
+    }
+    await renderCharts()
+  } catch (error) {
+    usageError.value = error
+    console.error('Failed to fetch my usage trends:', error)
+  } finally {
+    trendLoading.value = false
+  }
+}
+
+watch(selectedRange, () => {
+  fetchUsageTrend()
+})
+
+onMounted(async () => {
+  await Promise.all([
+    fetchMonthlySummary(),
+    fetchUsageTrend(),
+  ])
+})
+
+onBeforeUnmount(() => {
+  destroyCharts()
+})
 </script>
 
 <template>
@@ -40,29 +205,29 @@ const selectedRange = ref(chartRanges[0])
         <div class="kpi-card">
           <article>
             <span>이번달 토큰 사용량</span>
-            <strong>N k</strong>
+            <strong>{{ summaryLoading ? '...' : formatNumber(monthlySummary.totalTokens) }}</strong>
           </article>
 
           <article>
             <span>이번달 요청량</span>
-            <strong>N 회</strong>
+            <strong>{{ summaryLoading ? '...' : `${formatNumber(monthlySummary.chatRequestCount)}건` }}</strong>
           </article>
         </div>
       </div>
 
-      <div class="range-toggle" aria-label="그래프 x축 시간대">
+      <div class="range-toggle" aria-label="그래프 기간">
         <span>기간</span>
 
         <div class="range-toggle-buttons">
           <button
             v-for="range in chartRanges"
-            :key="range"
+            :key="range.value"
             type="button"
-            :class="{ active: selectedRange === range }"
-            :aria-pressed="selectedRange === range"
-            @click="selectedRange = range"
+            :class="{ active: selectedRange === range.value }"
+            :aria-pressed="selectedRange === range.value"
+            @click="selectedRange = range.value"
           >
-            {{ range }}
+            {{ range.label }}
           </button>
         </div>
       </div>
@@ -124,9 +289,12 @@ const selectedRange = ref(chartRanges[0])
         </div>
 
         <div class="chart-stage">
-          <canvas aria-label="토큰 사용량 차트 영역"></canvas>
-          <div class="chart-placeholder">
-            Chart.js line chart
+          <canvas ref="tokenCanvas" aria-label="토큰 사용량 차트 영역"></canvas>
+          <div
+            v-if="trendLoading || !tokenValues.length"
+            class="chart-placeholder"
+          >
+            {{ trendLoading ? '불러오는 중...' : '표시할 데이터가 없습니다' }}
           </div>
         </div>
       </article>
@@ -140,12 +308,22 @@ const selectedRange = ref(chartRanges[0])
         </div>
 
         <div class="chart-stage">
-          <canvas aria-label="요청량 차트 영역"></canvas>
-          <div class="chart-placeholder">
-            Chart.js bar chart
+          <canvas ref="requestCanvas" aria-label="요청량 차트 영역"></canvas>
+          <div
+            v-if="trendLoading || !requestValues.length"
+            class="chart-placeholder"
+          >
+            {{ trendLoading ? '불러오는 중...' : '표시할 데이터가 없습니다' }}
           </div>
         </div>
       </article>
+
+      <p
+        v-if="usageError"
+        class="usage-error"
+      >
+        사용량 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+      </p>
     </div>
   </section>
 </template>
@@ -171,7 +349,8 @@ const selectedRange = ref(chartRanges[0])
   grid-template-areas:
     "kpi profile"
     "chart profile"
-    "request request";
+    "request request"
+    "error error";
   gap: 24px 28px;
   align-items: start;
 }
@@ -372,7 +551,7 @@ const selectedRange = ref(chartRanges[0])
 .chart-stage {
   height: 190px;
   position: relative;
-  border: 1px dashed rgba(138, 148, 172, 0.34);
+  border: 1px solid rgba(var(--color-border-muted-rgb), 0.42);
   background:
     linear-gradient(rgba(234, 241, 254, 0.58) 1px, transparent 1px),
     linear-gradient(90deg, rgba(234, 241, 254, 0.58) 1px, transparent 1px);
@@ -396,6 +575,19 @@ const selectedRange = ref(chartRanges[0])
   color: var(--color-subtle);
   font-size: 13px;
   font-weight: 700;
+  background: rgba(var(--color-white-rgb), 0.62);
+}
+
+.usage-error {
+  grid-area: error;
+  margin: 0;
+  border: 1px solid var(--color-warning-border);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 @media (max-width: 1040px) {
@@ -409,7 +601,8 @@ const selectedRange = ref(chartRanges[0])
       "profile"
       "kpi"
       "chart"
-      "request";
+      "request"
+      "error";
   }
 
   .range-toggle {

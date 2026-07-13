@@ -1,141 +1,80 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Chart from 'chart.js/auto'
+import { adminObservabilityApi } from '../../api/adminObservabilityApi'
 
-const ranges = ['24H', '7', '14', '30']
-const selectedRange = ref(ranges[0])
+const ranges = [
+  { label: '24H', value: '24h' },
+  { label: '7', value: '7d' },
+  { label: '14', value: '14d' },
+  { label: '30', value: '30d' },
+]
+const selectedRange = ref(ranges[0].value)
+const dashboard = ref(null)
+const isLoading = ref(false)
+const errorMessage = ref('')
 
-const kpis = [
+const summary = computed(() => dashboard.value?.summary ?? {
+  totalRequests: 0,
+  totalRequestsDeltaPercent: 0,
+  answerSuccessRate: 0,
+  answerSuccessRateDeltaPercent: 0,
+  totalTokens: 0,
+  totalTokensDeltaPercent: 0,
+  activeUsers: 0,
+  activeUsersDeltaPercent: 0,
+  signupUsers: 0,
+  signupUsersDeltaPercent: 0,
+  avgLatencyMs: 0,
+  avgLatencyDeltaPercent: 0,
+  topDomain: '',
+  topDomainCount: 0,
+  topDomainCountDeltaPercent: 0,
+})
+
+const kpis = computed(() => [
   {
     label: '답변 평균 지연 시간',
-    value: 'N ms',
-    delta: '이전달 대비 n%',
+    value: `${formatNumber(summary.value.avgLatencyMs)} ms`,
+    delta: deltaText(summary.value.avgLatencyDeltaPercent),
   },
   {
-    label: '이번달 총 토큰 사용량',
-    value: 'N k',
-    delta: '이전달 대비 n%',
+    label: '총 토큰 사용량',
+    value: formatNumber(summary.value.totalTokens),
+    delta: deltaText(summary.value.totalTokensDeltaPercent),
   },
   {
-    label: '이번달 요청량',
-    value: 'N 회',
-    delta: '이전달 대비 n%',
+    label: '요청량',
+    value: `${formatNumber(summary.value.totalRequests)} 회`,
+    delta: deltaText(summary.value.totalRequestsDeltaPercent),
   },
   {
-    label: '이번달 가장 많이 사용된 도메인',
-    value: '주차 N 회',
-    delta: '이전달 대비 n%',
+    label: '가장 많이 사용된 도메인',
+    value: `${domainLabel(summary.value.topDomain)} ${formatNumber(summary.value.topDomainCount)} 회`,
+    delta: deltaText(summary.value.topDomainCountDeltaPercent),
   },
   {
-    label: '이번달 가입한 유저',
-    value: 'N 명',
-    delta: '이전달 대비 n%',
+    label: '가입한 유저',
+    value: `${formatNumber(summary.value.signupUsers)} 명`,
+    delta: deltaText(summary.value.signupUsersDeltaPercent),
   },
   {
-    label: '이번달 로그인 한 유저 MAU',
-    value: 'N 명',
-    delta: '이전달 대비 n%',
+    label: '답변 성공률',
+    value: `${formatPercent(summary.value.answerSuccessRate)}%`,
+    delta: deltaText(summary.value.answerSuccessRateDeltaPercent),
   },
-]
+])
 
-const logRows = [
-  {
-    createdAt: '2026-07-12T13:48:00+09:00',
-    time: '09:12',
-    user: '김하늘',
-    email: 'haneul@example.com',
-    provider: 'Google',
-    event: '로그인',
-  },
-  {
-    createdAt: '2026-07-12T12:34:00+09:00',
-    time: '10:34',
-    user: '이서준',
-    email: 'seojun@example.com',
-    provider: 'Kakao',
-    event: '회원가입',
-  },
-  {
-    createdAt: '2026-07-12T11:48:00+09:00',
-    time: '13:48',
-    user: '박지민',
-    email: 'jimin@example.com',
-    provider: 'Google',
-    event: '로그인',
-  },
-  {
-    createdAt: '2026-07-12T10:21:00+09:00',
-    time: '10:21',
-    user: '최유진',
-    email: 'yujin@example.com',
-    provider: 'Naver',
-    event: '로그인',
-  },
-  {
-    createdAt: '2026-07-12T09:45:00+09:00',
-    time: '09:45',
-    user: '정도윤',
-    email: 'doyun@example.com',
-    provider: 'Google',
-    event: '회원가입',
-  },
-  {
-    createdAt: '2026-07-11T18:16:00+09:00',
-    time: '18:16',
-    user: '한서아',
-    email: 'seoa@example.com',
-    provider: 'Kakao',
-    event: '로그인',
-  },
-  {
-    createdAt: '2026-07-11T16:08:00+09:00',
-    time: '16:08',
-    user: '오지후',
-    email: 'jihuu@example.com',
-    provider: 'Google',
-    event: '로그인',
-  },
-  {
-    createdAt: '2026-07-11T14:22:00+09:00',
-    time: '14:22',
-    user: '문채원',
-    email: 'chaewon@example.com',
-    provider: 'Naver',
-    event: '회원가입',
-  },
-  {
-    createdAt: '2026-07-11T11:03:00+09:00',
-    time: '11:03',
-    user: '강민재',
-    email: 'minjae@example.com',
-    provider: 'Google',
-    event: '로그인',
-  },
-  {
-    createdAt: '2026-07-10T17:51:00+09:00',
-    time: '17:51',
-    user: '윤나연',
-    email: 'nayeon@example.com',
-    provider: 'Kakao',
-    event: '로그인',
-  },
-  {
-    createdAt: '2026-07-10T15:29:00+09:00',
-    time: '15:29',
-    user: '서준호',
-    email: 'junho@example.com',
-    provider: 'Google',
-    event: '회원가입',
-  },
-  {
-    createdAt: '2026-07-10T09:37:00+09:00',
-    time: '09:37',
-    user: '임수빈',
-    email: 'subin@example.com',
-    provider: 'Naver',
-    event: '로그인',
-  },
-]
+const logRows = computed(() => {
+  return (dashboard.value?.recentAuthLogs ?? []).map((row) => ({
+    createdAt: row.createdAt,
+    time: formatTime(row.createdAt),
+    user: row.userId ? `#${row.userId}` : '-',
+    email: row.email ?? '-',
+    provider: row.provider ?? '-',
+    event: eventLabel(row.eventType),
+  }))
+})
 
 const LOG_PREVIEW_SIZE = 6
 const LOG_PAGE_SIZE = 10
@@ -144,7 +83,7 @@ const authLogPage = ref(1)
 const authLogEmailQuery = ref('')
 
 const sortedLogRows = computed(() => {
-  return [...logRows].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+  return [...logRows.value].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
 })
 
 const visibleLogRows = computed(() => sortedLogRows.value.slice(0, LOG_PREVIEW_SIZE))
@@ -192,7 +131,6 @@ watch(totalLogPages, (nextTotalPages) => {
 
 const tokenTrendCanvas = ref(null)
 const tokenUsageCanvas = ref(null)
-const hitRatioCanvas = ref(null)
 const requestCanvas = ref(null)
 const signupCanvas = ref(null)
 const mauCanvas = ref(null)
@@ -230,6 +168,7 @@ const baseChartOptions = {
       },
     },
     y: {
+      beginAtZero: true,
       grid: {
         color: 'rgba(227, 232, 242, 0.8)',
       },
@@ -243,20 +182,55 @@ const baseChartOptions = {
   },
 }
 
+const paddedBarChartOptions = {
+  ...baseChartOptions,
+  layout: {
+    padding: {
+      left: 14,
+      right: 14,
+    },
+  },
+  scales: {
+    ...baseChartOptions.scales,
+    x: {
+      ...baseChartOptions.scales.x,
+      offset: true,
+    },
+  },
+}
+
 const createChart = (canvas, config) => {
   if (!canvas.value) return
 
   charts.push(new Chart(canvas.value, config))
 }
 
-onMounted(() => {
+const destroyCharts = () => {
+  while (charts.length > 0) {
+    charts.pop()?.destroy()
+  }
+}
+
+const renderCharts = () => {
+  destroyCharts()
+
+  const tokenPoints = dashboard.value?.tokenUsageTrend ?? []
+  const toolUsage = dashboard.value?.toolUsage ?? []
+  const requestTrend = dashboard.value?.requestTrend ?? []
+  const authTrend = dashboard.value?.authTrend ?? []
+  const ragSummary = dashboard.value?.ragSummary ?? {
+    totalSearches: 0,
+    avgHitCount: 0,
+    avgLatencyMs: 0,
+  }
+
   createChart(tokenTrendCanvas, {
     type: 'line',
     data: {
-      labels: ['00', '04', '08', '12', '16', '20', '24'],
+      labels: tokenPoints.map((point) => point.label),
       datasets: [
         {
-          data: [18, 24, 21, 32, 44, 38, 46],
+          data: tokenPoints.map((point) => point.totalTokens),
           borderColor: '#1b4396',
           backgroundColor: 'rgba(27, 67, 150, 0.12)',
           fill: true,
@@ -272,56 +246,27 @@ onMounted(() => {
   createChart(tokenUsageCanvas, {
     type: 'bar',
     data: {
-      labels: ['예약', '규정', '비품', '식당', '기타'],
+      labels: toolUsage.map((item) => compactToolName(item.toolName)),
       datasets: [
         {
-          data: [72, 48, 58, 35, 28],
+          data: toolUsage.map((item) => item.count),
+          categoryPercentage: 0.7,
+          barPercentage: 0.78,
           borderRadius: 6,
-          backgroundColor: ['#17306e', '#1b4396', '#12a5de', '#2fa35c', '#f6c21a'],
+          backgroundColor: ['#17306e', '#1b4396', '#12a5de', '#2fa35c', '#f6c21a', '#f0812c'],
         },
       ],
     },
-    options: baseChartOptions,
-  })
-
-  createChart(hitRatioCanvas, {
-    type: 'doughnut',
-    data: {
-      labels: ['lag hit', 'nohit'],
-      datasets: [
-        {
-          data: [68, 32],
-          backgroundColor: ['#1b4396', 'var(--color-primary-border-muted)'],
-          borderWidth: 0,
-          hoverOffset: 4,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: '62%',
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            color: '#6b7690',
-            boxWidth: 10,
-            boxHeight: 10,
-            usePointStyle: true,
-          },
-        },
-      },
-    },
+    options: paddedBarChartOptions,
   })
 
   createChart(requestCanvas, {
     type: 'bar',
     data: {
-      labels: ['월', '화', '수', '목', '금', '토', '일'],
+      labels: requestTrend.map((point) => point.label),
       datasets: [
         {
-          data: [120, 168, 144, 190, 176, 88, 74],
+          data: requestTrend.map((point) => point.value),
           borderRadius: 6,
           backgroundColor: '#12a5de',
         },
@@ -333,10 +278,10 @@ onMounted(() => {
   createChart(signupCanvas, {
     type: 'line',
     data: {
-      labels: ['1주', '2주', '3주', '4주'],
+      labels: authTrend.map((point) => point.label),
       datasets: [
         {
-          data: [8, 13, 11, 18],
+          data: authTrend.map((point) => point.value),
           borderColor: '#2fa35c',
           backgroundColor: 'rgba(47, 163, 92, 0.12)',
           fill: true,
@@ -349,26 +294,116 @@ onMounted(() => {
   })
 
   createChart(mauCanvas, {
-    type: 'line',
+    type: 'bar',
     data: {
-      labels: ['1월', '2월', '3월', '4월', '5월', '6월'],
+      labels: ['검색 수', '평균 반환 문서 수', '평균 지연'],
       datasets: [
         {
-          data: [180, 210, 236, 228, 264, 302],
-          borderColor: '#f0812c',
-          backgroundColor: 'rgba(240, 129, 44, 0.12)',
-          fill: true,
-          tension: 0.35,
-          pointRadius: 3,
+          data: [
+            ragSummary.totalSearches,
+            Math.round(ragSummary.avgHitCount * 10) / 10,
+            ragSummary.avgLatencyMs,
+          ],
+          categoryPercentage: 0.62,
+          barPercentage: 0.72,
+          borderRadius: 6,
+          backgroundColor: ['#1b4396', '#12a5de', '#f0812c'],
         },
       ],
     },
-    options: baseChartOptions,
+    options: paddedBarChartOptions,
   })
-})
+}
+
+const fetchDashboard = async () => {
+  isLoading.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await adminObservabilityApi.getDashboard(selectedRange.value)
+    dashboard.value = response.data
+    await nextTick()
+    renderCharts()
+  } catch (error) {
+    console.error('Failed to load admin observability dashboard:', error)
+    errorMessage.value = '관리자 대시보드를 불러오지 못했습니다.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const formatNumber = (value) => {
+  return Number(value ?? 0).toLocaleString('ko-KR')
+}
+
+const formatPercent = (value) => {
+  return Number(value ?? 0).toLocaleString('ko-KR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 1,
+  })
+}
+
+const deltaText = (value) => {
+  const numericValue = Number(value ?? 0)
+  if (numericValue === 0) return '지난달 대비 0%'
+  const sign = numericValue > 0 ? '+' : ''
+  return `지난달 대비 ${sign}${formatPercent(numericValue)}%`
+}
+
+const formatTime = (value) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+const compactToolName = (toolName) => {
+  if (!toolName) return '-'
+  const domainName = domainLabel(toolName)
+  if (domainName !== toolName) return domainName
+
+  return toolName
+    .replace('meeting_room_', '회의실 ')
+    .replace('parking_', '주차 ')
+    .replace('cafeteria_', '식당 ')
+    .replace('office_supplies_', '비품 ')
+    .replaceAll('_', ' ')
+}
+
+const domainLabel = (domain) => {
+  const labels = {
+    meeting_room: '회의실',
+    parking: '주차',
+    cafeteria: '구내식당',
+    office_supplies: '비품',
+    policy_rag: '사내 규정',
+    rag: 'RAG',
+    unknown: '기타',
+  }
+
+  return labels[domain] ?? domain ?? '-'
+}
+
+const eventLabel = (eventType) => {
+  if (eventType === 'login') return '로그인'
+  if (eventType === 'signup') return '회원가입'
+  if (eventType === 'logout') return '로그아웃'
+  return eventType || '-'
+}
+
+watch(selectedRange, fetchDashboard)
+
+onMounted(fetchDashboard)
 
 onBeforeUnmount(() => {
-  charts.forEach((chart) => chart.destroy())
+  destroyCharts()
 })
 </script>
 
@@ -378,6 +413,7 @@ onBeforeUnmount(() => {
       <header class="admin-heading">
         <p>Admin</p>
         <h1 id="admin-dashboard-title">관리자 대시보드</h1>
+        <small class="kpi-period-note">상단 카드는 이번달 기준이며 지난달 대비 변화량을 표시합니다.</small>
       </header>
 
       <section class="admin-kpi-card" aria-label="관리자 KPI">
@@ -388,19 +424,22 @@ onBeforeUnmount(() => {
         </article>
       </section>
 
+      <p v-if="errorMessage" class="dashboard-error">{{ errorMessage }}</p>
+      <p v-else-if="isLoading" class="dashboard-loading">대시보드를 불러오는 중입니다.</p>
+
       <div class="range-toggle" aria-label="차트 기간 선택">
         <span>기간</span>
 
         <div class="range-toggle-buttons">
           <button
             v-for="range in ranges"
-            :key="range"
+            :key="range.value"
             type="button"
-            :class="{ active: selectedRange === range }"
-            :aria-pressed="selectedRange === range"
-            @click="selectedRange = range"
+            :class="{ active: selectedRange === range.value }"
+            :aria-pressed="selectedRange === range.value"
+            @click="selectedRange = range.value"
           >
-            {{ range }}
+            {{ range.label }}
           </button>
         </div>
       </div>
@@ -420,24 +459,12 @@ onBeforeUnmount(() => {
       <article class="dashboard-card token-total-card">
         <div class="card-header">
           <div>
-            <span>Total Tool Call Count</span>
-            <h2>전체 툴 호출 횟수</h2>
+            <span>Tool Call by Domain</span>
+            <h2>도메인별 툴 호출 횟수</h2>
           </div>
         </div>
         <div class="chart-area">
-          <canvas ref="tokenUsageCanvas" aria-label="전체 토큰 사용률 차트"></canvas>
-        </div>
-      </article>
-
-      <article class="dashboard-card hit-ratio-card">
-        <div class="card-header">
-          <div>
-            <span>Hit Ratio</span>
-            <h2>lag hit / nohit 비율</h2>
-          </div>
-        </div>
-        <div class="chart-area doughnut-area">
-          <canvas ref="hitRatioCanvas" aria-label="lag hit nohit 비율 도넛 차트"></canvas>
+          <canvas ref="tokenUsageCanvas" aria-label="도메인별 툴 호출 횟수 차트"></canvas>
         </div>
       </article>
 
@@ -466,7 +493,7 @@ onBeforeUnmount(() => {
           <table>
             <thead>
               <tr>
-                <th>시간</th>
+                <th>일시</th>
                 <th>유저</th>
                 <th>이메일</th>
                 <th>Provider</th>
@@ -481,6 +508,9 @@ onBeforeUnmount(() => {
                 <td>{{ row.provider }}</td>
                 <td>{{ row.event }}</td>
               </tr>
+              <tr v-if="visibleLogRows.length === 0">
+                <td colspan="5" class="auth-log-empty">표시할 로그가 없습니다.</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -489,24 +519,24 @@ onBeforeUnmount(() => {
       <article class="dashboard-card signup-card">
         <div class="card-header">
           <div>
-            <span>New Users</span>
-            <h2>가입자 수 그래프</h2>
+            <span>MAU</span>
+            <h2>MAU 변화량</h2>
           </div>
         </div>
         <div class="chart-area">
-          <canvas ref="signupCanvas" aria-label="가입자 수 그래프"></canvas>
+          <canvas ref="signupCanvas" aria-label="MAU 변화량 그래프"></canvas>
         </div>
       </article>
 
       <article class="dashboard-card mau-card">
         <div class="card-header">
           <div>
-            <span>MAU</span>
-            <h2>MAU 변화량</h2>
+            <span>RAG</span>
+            <h2>RAG 검색 결과 요약</h2>
           </div>
         </div>
         <div class="chart-area">
-          <canvas ref="mauCanvas" aria-label="MAU 변화량 그래프"></canvas>
+          <canvas ref="mauCanvas" aria-label="RAG 검색 결과 요약 그래프"></canvas>
         </div>
       </article>
     </div>
@@ -553,7 +583,7 @@ onBeforeUnmount(() => {
           <table>
             <thead>
               <tr>
-                <th>시간</th>
+                <th>일시</th>
                 <th>유저</th>
                 <th>이메일</th>
                 <th>Provider</th>
@@ -614,7 +644,7 @@ onBeforeUnmount(() => {
 }
 
 .admin-heading {
-  grid-column: 1 / 5;
+  grid-column: 1 / -1;
   align-self: end;
 }
 
@@ -634,8 +664,17 @@ onBeforeUnmount(() => {
   line-height: 1.25;
 }
 
+.kpi-period-note {
+  display: block;
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .admin-kpi-card {
-  grid-column: 5 / 13;
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   border: 1px solid rgba(var(--color-border-muted-rgb), 0.85);
@@ -647,8 +686,8 @@ onBeforeUnmount(() => {
 
 .admin-kpi-card article {
   min-width: 0;
-  min-height: 88px;
-  padding: 14px 16px;
+  min-height: 98px;
+  padding: 16px 16px;
   border-right: 1px solid var(--color-border-light);
   display: flex;
   flex-direction: column;
@@ -671,14 +710,33 @@ onBeforeUnmount(() => {
 
 .admin-kpi-card strong {
   color: var(--color-primary);
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 850;
+  line-height: 1.24;
+  word-break: keep-all;
 }
 
 .admin-kpi-card small {
   color: var(--color-subtle);
   font-size: 11.5px;
   line-height: 1.3;
+}
+
+.dashboard-error,
+.dashboard-loading {
+  grid-column: 1 / 11;
+  margin: 0;
+  border: 1px solid var(--color-border-light);
+  border-radius: 8px;
+  background: rgba(var(--color-white-rgb), 0.82);
+  color: var(--color-muted);
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.dashboard-error {
+  color: #b42318;
 }
 
 .range-toggle {
@@ -745,11 +803,7 @@ onBeforeUnmount(() => {
 }
 
 .token-total-card {
-  grid-column: 7 / 10;
-}
-
-.hit-ratio-card {
-  grid-column: 10 / 13;
+  grid-column: 7 / 13;
 }
 
 .request-card {
@@ -803,10 +857,6 @@ onBeforeUnmount(() => {
   position: relative;
   flex: 1;
   min-height: 150px;
-}
-
-.doughnut-area {
-  min-height: 178px;
 }
 
 .chart-area canvas {
@@ -1023,7 +1073,6 @@ onBeforeUnmount(() => {
   .range-toggle,
   .token-trend-card,
   .token-total-card,
-  .hit-ratio-card,
   .request-card,
   .log-card,
   .signup-card,
