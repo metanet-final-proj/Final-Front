@@ -14,6 +14,19 @@ const normalizeToken = (token) => {
   return String(token).replace(/^"|"$/g, '').trim()
 }
 
+const normalizeRoles = (roles) => {
+  const roleList = Array.isArray(roles) ? roles : [roles]
+
+  return roleList
+    .map((role) => {
+      if (typeof role === 'string') return role
+
+      return role?.name || role?.role || role?.authority || ''
+    })
+    .map((role) => String(role).trim().toUpperCase())
+    .filter(Boolean)
+}
+
 const decodeJwtPayload = (token) => {
   const [, payload] = token.split('.')
 
@@ -52,6 +65,12 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (state) => Boolean(state.accessToken),
+
+    userRoles: (state) => normalizeRoles(state.user?.roles),
+
+    isOrgAdmin() {
+      return this.userRoles.includes('ORG_ADMIN')
+    },
 
     displayName: (state) => {
       return state.user?.displayName || '사용자'

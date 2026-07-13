@@ -404,6 +404,8 @@ const profileHeaderText = computed(() => {
   return `${profileName.value} ${profileJobTitle.value}`.trim()
 })
 
+const canAccessAdminDashboard = computed(() => authStore.isOrgAdmin)
+
 const isAnswering = computed(() => {
   return chatStore.sending
 })
@@ -897,12 +899,21 @@ const openMyPage = () => {
   pushPanelQuery(MAIN_PANEL.MYPAGE)
 }
 
-const openAdminDashboard = () => {
+const openAdminDashboard = async () => {
+  if (!canAccessAdminDashboard.value) {
+    mainPanel.value = MAIN_PANEL.CHAT
+    profileMenuOpen.value = false
+    panelKey.value = null
+    roomActionMenuId.value = null
+    await replacePanelQuery(MAIN_PANEL.CHAT)
+    return
+  }
+
   mainPanel.value = MAIN_PANEL.ADMIN
   profileMenuOpen.value = false
   panelKey.value = null
   roomActionMenuId.value = null
-  pushPanelQuery(MAIN_PANEL.ADMIN)
+  await pushPanelQuery(MAIN_PANEL.ADMIN)
 }
 
 const handleLogout = async () => {
@@ -940,9 +951,19 @@ watch(isDarkMode, (nextValue) => {
 })
 
 watch(
-  () => route.query.panel,
-  (panelQuery) => {
+  () => [route.query.panel, canAccessAdminDashboard.value],
+  async ([panelQuery]) => {
     const nextPanel = getPanelFromQuery(panelQuery)
+
+    if (nextPanel === MAIN_PANEL.ADMIN && !canAccessAdminDashboard.value) {
+      mainPanel.value = MAIN_PANEL.CHAT
+      profileMenuOpen.value = false
+      panelKey.value = null
+      roomActionMenuId.value = null
+      await replacePanelQuery(MAIN_PANEL.CHAT)
+      return
+    }
+
     mainPanel.value = nextPanel
 
     if (nextPanel !== MAIN_PANEL.CHAT) {
@@ -1497,6 +1518,7 @@ onBeforeUnmount(() => {
             </div>
 
             <button
+              v-if="canAccessAdminDashboard"
               class="mypage-button admin-dashboard-button"
               type="button"
               @click="openAdminDashboard"
@@ -1528,11 +1550,11 @@ onBeforeUnmount(() => {
         class="chat-main"
         :class="{
           'start-mode': mainPanel === MAIN_PANEL.CHAT && showWelcome,
-          'admin-mode': mainPanel === MAIN_PANEL.ADMIN,
+          'admin-mode': mainPanel === MAIN_PANEL.ADMIN && canAccessAdminDashboard,
           'mypage-mode': mainPanel === MAIN_PANEL.MYPAGE,
         }"
       >
-  <AdminDashboardPanel v-if="mainPanel === MAIN_PANEL.ADMIN" />
+  <AdminDashboardPanel v-if="mainPanel === MAIN_PANEL.ADMIN && canAccessAdminDashboard" />
 
   <MyPagePanel
     v-else-if="mainPanel === MAIN_PANEL.MYPAGE"
@@ -2316,6 +2338,10 @@ onBeforeUnmount(() => {
 .sidebar-toggle-button:hover {
   background: var(--color-surface-soft);
   border-color: var(--color-primary-light);
+}
+
+.sidebar-brand-row .sidebar-toggle-button {
+  margin-right: 6px;
 }
 
 .collapsed-sidebar .sidebar-toggle-button {
