@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import { chatApi } from '../api/chatApi'
 
+const DEBUG_CHAT_SSE =
+  import.meta.env.DEV || localStorage.getItem('debugChatSse') === '1'
+
 const nowTime = () => {
   const date = new Date()
   const hour = date.getHours()
@@ -16,12 +19,17 @@ const ASSISTANT_FAILURE_TEXT = '답변 생성에 실패했습니다. 잠시 후 
 
 const STAGE_LABELS = {
   planning: '요청을 분석하고 있어요...',
+  summarizing: '지금까지의 대화를 요약하고 있어요...',
   generating: '답변을 작성하고 있어요...',
 }
 
 const getStatusText = (parsed) => {
   if (parsed.event === 'status') {
     return parsed.data?.message || STAGE_LABELS[parsed.data?.stage] || null
+  }
+
+  if (parsed.event === 'summary') {
+    return parsed.data?.message || '이전 대화 요약을 완료했어요.'
   }
 
   if (parsed.event === 'progress') {
@@ -38,8 +46,11 @@ const getStatusText = (parsed) => {
 
 const AGENT_STAGE_TITLES = {
   planning: '요청을 분석하고 계획을 세우는 중',
+  summarizing: '답변을 요약하는 중',
   generating: '답변 생성을 준비하는 중',
 }
+
+const RUNNING_STATUS_STAGES = new Set(['summarizing', 'generating'])
 
 const createAgentActivity = (currentText = ASSISTANT_LOADING_TEXT) => ({
   currentText,
@@ -100,7 +111,7 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
       id: `status-${stage}`,
       type: 'status',
       title: data.message || AGENT_STAGE_TITLES[stage] || statusText,
-      status: stage === 'generating' ? 'running' : 'done',
+      status: RUNNING_STATUS_STAGES.has(stage) ? 'running' : 'done',
     }
     const completedSteps = (baseActivity.steps || []).map((step) =>
       step.status === 'running'
@@ -119,6 +130,32 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
         steps: completedSteps,
       },
       nextStep,
+    )
+  }
+
+  if (parsed.event === 'summary') {
+    const completedSteps = (baseActivity.steps || []).map((step) =>
+      step.status === 'running'
+        ? {
+            ...step,
+            status: 'done',
+          }
+        : step,
+    )
+
+    return updateAgentStep(
+      {
+        ...baseActivity,
+        currentText: statusText,
+        collapsed: false,
+        steps: completedSteps,
+      },
+      {
+        id: 'status-summarizing',
+        type: 'summary',
+        title: statusText,
+        status: 'done',
+      },
     )
   }
 
@@ -671,6 +708,16 @@ export const useChatStore = defineStore('chat', {
             if (!chunk) return
           
             if (!hasReceivedFirstChunk) {
+              if (DEBUG_CHAT_SSE) {
+                console.log('[chat:store:first-chunk]', {
+                  conversationId,
+                  localAssistantMessageId,
+                  data,
+                  chunk,
+                  agentActivity,
+                })
+              }
+
               hasReceivedFirstChunk = true
               agentActivity = completeAgentActivity(agentActivity)
           
@@ -692,6 +739,15 @@ export const useChatStore = defineStore('chat', {
           },
 
           onAssistantMessage: (data) => {
+            if (DEBUG_CHAT_SSE) {
+              console.log('[chat:store:assistant-message]', {
+                conversationId,
+                localAssistantMessageId,
+                data,
+                agentActivity,
+              })
+            }
+
             hasReceivedAssistantMessage = true
             agentActivity = completeAgentActivity(agentActivity)
             this.replaceLocalMessage(
@@ -709,21 +765,56 @@ export const useChatStore = defineStore('chat', {
           },
 
           onEvent: (parsed) => {
+            if (DEBUG_CHAT_SSE) {
+              console.log('[chat:store:event:received]', {
+                event: parsed.event,
+                data: parsed.data,
+                rawData: parsed.rawData,
+                hasReceivedFirstChunk,
+                currentSteps: agentActivity?.steps || [],
+              })
+            }
+
             extractRefreshTargets(parsed.data).forEach((target) => {
               refreshTargets.add(target)
             })
 
-            if (hasReceivedFirstChunk) return
-
             const statusText = getStatusText(parsed)
-            if (!statusText) return
+            if (!statusText) {
+              if (DEBUG_CHAT_SSE) {
+                console.log('[chat:store:event:no-status-text]', {
+                  event: parsed.event,
+                  data: parsed.data,
+                })
+              }
+              return
+            }
+
             agentActivity = updateAgentActivityFromEvent(agentActivity, parsed)
 
-            this.patchLocalMessage(conversationId, localAssistantMessageId, {
-              text: statusText,
-              content: statusText,
-              agentActivity,
-            })
+            if (DEBUG_CHAT_SSE) {
+              console.log('[chat:store:event:activity-updated]', {
+                event: parsed.event,
+                statusText,
+                hasReceivedFirstChunk,
+                steps: agentActivity?.steps || [],
+                agentActivity,
+              })
+            }
+
+            const activityPatch = hasReceivedFirstChunk
+              ? { agentActivity }
+              : {
+                  text: statusText,
+                  content: statusText,
+                  agentActivity,
+                }
+
+            this.patchLocalMessage(
+              conversationId,
+              localAssistantMessageId,
+              activityPatch,
+            )
           },      
         })
 
