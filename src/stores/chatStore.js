@@ -1,9 +1,6 @@
 import { defineStore } from 'pinia'
 import { chatApi } from '../api/chatApi'
 
-const DEBUG_CHAT_SSE =
-  import.meta.env.DEV || localStorage.getItem('debugChatSse') === '1'
-
 const nowTime = () => {
   const date = new Date()
   const hour = date.getHours()
@@ -708,16 +705,6 @@ export const useChatStore = defineStore('chat', {
             if (!chunk) return
           
             if (!hasReceivedFirstChunk) {
-              if (DEBUG_CHAT_SSE) {
-                console.log('[chat:store:first-chunk]', {
-                  conversationId,
-                  localAssistantMessageId,
-                  data,
-                  chunk,
-                  agentActivity,
-                })
-              }
-
               hasReceivedFirstChunk = true
               agentActivity = completeAgentActivity(agentActivity)
           
@@ -739,15 +726,6 @@ export const useChatStore = defineStore('chat', {
           },
 
           onAssistantMessage: (data) => {
-            if (DEBUG_CHAT_SSE) {
-              console.log('[chat:store:assistant-message]', {
-                conversationId,
-                localAssistantMessageId,
-                data,
-                agentActivity,
-              })
-            }
-
             hasReceivedAssistantMessage = true
             agentActivity = completeAgentActivity(agentActivity)
             this.replaceLocalMessage(
@@ -765,42 +743,14 @@ export const useChatStore = defineStore('chat', {
           },
 
           onEvent: (parsed) => {
-            if (DEBUG_CHAT_SSE) {
-              console.log('[chat:store:event:received]', {
-                event: parsed.event,
-                data: parsed.data,
-                rawData: parsed.rawData,
-                hasReceivedFirstChunk,
-                currentSteps: agentActivity?.steps || [],
-              })
-            }
-
             extractRefreshTargets(parsed.data).forEach((target) => {
               refreshTargets.add(target)
             })
 
             const statusText = getStatusText(parsed)
-            if (!statusText) {
-              if (DEBUG_CHAT_SSE) {
-                console.log('[chat:store:event:no-status-text]', {
-                  event: parsed.event,
-                  data: parsed.data,
-                })
-              }
-              return
-            }
+            if (!statusText) return
 
             agentActivity = updateAgentActivityFromEvent(agentActivity, parsed)
-
-            if (DEBUG_CHAT_SSE) {
-              console.log('[chat:store:event:activity-updated]', {
-                event: parsed.event,
-                statusText,
-                hasReceivedFirstChunk,
-                steps: agentActivity?.steps || [],
-                agentActivity,
-              })
-            }
 
             const activityPatch = hasReceivedFirstChunk
               ? { agentActivity }

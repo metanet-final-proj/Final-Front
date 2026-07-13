@@ -1,9 +1,6 @@
 import apiClient from './client'
 import { useAuthStore } from '../stores/authStore'
 
-const DEBUG_CHAT_SSE =
-  import.meta.env.DEV || localStorage.getItem('debugChatSse') === '1'
-
 const getApiBaseUrl = () => {
   if (import.meta.env.DEV) {
     return ''
@@ -54,8 +51,6 @@ const parseSseEventBlock = (block) => {
   return {
     event: eventName,
     data,
-    rawData,
-    rawBlock: block,
   }
 }
 
@@ -100,16 +95,6 @@ const consumeSseStream = async (response, handlers = {}) => {
 
       const parsed = parseSseEventBlock(trimmedBlock)
 
-      if (DEBUG_CHAT_SSE) {
-        console.log('[chat:sse:parsed]', {
-          event: parsed.event,
-          data: parsed.data,
-          rawData: parsed.rawData,
-          rawBlock: parsed.rawBlock,
-          dataType: typeof parsed.data,
-        })
-      }
-
       if (parsed.event === 'user_message') {
         handlers.onUserMessage?.(parsed.data)
         continue
@@ -138,16 +123,6 @@ const consumeSseStream = async (response, handlers = {}) => {
 
   if (remaining) {
     const parsed = parseSseEventBlock(remaining)
-
-    if (DEBUG_CHAT_SSE) {
-      console.log('[chat:sse:parsed:remaining]', {
-        event: parsed.event,
-        data: parsed.data,
-        rawData: parsed.rawData,
-        rawBlock: parsed.rawBlock,
-        dataType: typeof parsed.data,
-      })
-    }
 
     if (parsed.event === 'user_message') {
       handlers.onUserMessage?.(parsed.data)
