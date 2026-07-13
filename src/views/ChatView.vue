@@ -596,10 +596,10 @@ const sendMessage = async (text = draft.value) => {
 
   draft.value = ''
     try {
-      await chatStore.sendMessage(conversationId, messageText)
-      workhubStore.fetchSidebarSummary().catch((error) => {
-        console.error('Failed to refresh Workhub sidebar summary:', error)
-      })
+      const result = await chatStore.sendMessage(conversationId, messageText)
+      if (result?.refreshTargets?.includes('workhub_sidebar')) {
+        refreshWorkhubSidebar()
+      }
 
       if (
       currentRoomTitle === '새 채팅' ||
@@ -797,6 +797,14 @@ const closePanel = () => {
   panelKey.value = null
 }
 
+const refreshWorkhubSidebar = async () => {
+  try {
+    await workhubStore.fetchSidebarSummary()
+  } catch (error) {
+    console.error('Failed to refresh Workhub sidebar summary:', error)
+  }
+}
+
 const runPanelAction = async () => {
   if (!currentPanel.value || businessActionLoading.value) return
 
@@ -889,9 +897,7 @@ onMounted(async () => {
 
   try {
     await chatStore.fetchConversations()
-    workhubStore.fetchSidebarSummary().catch((error) => {
-      console.error('Failed to fetch Workhub sidebar summary:', error)
-    })
+    refreshWorkhubSidebar()
     composingNewChat.value = true
     chatStore.setActiveConversation(null)
 
@@ -1083,6 +1089,30 @@ onBeforeUnmount(() => {
                 </span>
                 오늘의 업무 바로가기
               </h2>
+              <button
+                class="side-refresh-button"
+                type="button"
+                :disabled="workhubStore.loading"
+                aria-label="Refresh workhub sidebar"
+                @click.stop="refreshWorkhubSidebar"
+              >
+                <svg
+                  :class="{ spinning: workhubStore.loading }"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M21 12a9 9 0 0 1-15.3 6.4" />
+                  <path d="M3 12A9 9 0 0 1 18.3 5.6" />
+                  <path d="M18 2v4h-4" />
+                  <path d="M6 22v-4h4" />
+                </svg>
+              </button>
               <span
                 class="side-section-toggle"
                 aria-hidden="true"
@@ -2442,6 +2472,45 @@ onBeforeUnmount(() => {
   color: var(--color-text);
 }
 
+.side-refresh-button {
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.55;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.side-refresh-button:hover:not(:disabled),
+.side-refresh-button:focus-visible {
+  background: var(--color-bg);
+  color: var(--color-primary);
+  opacity: 1;
+}
+
+.side-refresh-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.side-refresh-button .spinning {
+  animation: refreshSpin 0.9s linear infinite;
+}
+
+.side-refresh-button + .side-section-toggle {
+  margin-left: 4px;
+}
+
 .side-section-toggle {
   width: 26px;
   height: 26px;
@@ -2476,6 +2545,12 @@ onBeforeUnmount(() => {
 
 .side-section-chevron.collapsed {
   transform: rotate(-90deg);
+}
+
+@keyframes refreshSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .room-loading,

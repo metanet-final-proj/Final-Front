@@ -293,6 +293,18 @@ const extractChunkContent = (data) => {
   return String(data)
 }
 
+const extractRefreshTargets = (data) => {
+  const targets = data?.refreshTargets || data?.refresh_targets
+
+  if (!Array.isArray(targets)) {
+    return []
+  }
+
+  return targets
+    .map((target) => String(target || '').trim())
+    .filter(Boolean)
+}
+
 export const useChatStore = defineStore('chat', {
   state: () => ({
     conversations: [],
@@ -640,6 +652,7 @@ export const useChatStore = defineStore('chat', {
       let hasReceivedFirstChunk = false
       let hasReceivedAssistantMessage = false
       let agentActivity = localAssistantMessage.agentActivity
+      const refreshTargets = new Set()
 
       this.appendLocalMessage(conversationId, localUserMessage)
       this.appendLocalMessage(conversationId, localAssistantMessage)
@@ -696,6 +709,10 @@ export const useChatStore = defineStore('chat', {
           },
 
           onEvent: (parsed) => {
+            extractRefreshTargets(parsed.data).forEach((target) => {
+              refreshTargets.add(target)
+            })
+
             if (hasReceivedFirstChunk) return
 
             const statusText = getStatusText(parsed)
@@ -721,7 +738,10 @@ export const useChatStore = defineStore('chat', {
 
         await this.fetchConversations()
 
-        return this.messagesByConversationId[String(conversationId)] || []
+        return {
+          messages: this.messagesByConversationId[String(conversationId)] || [],
+          refreshTargets: [...refreshTargets],
+        }
       } catch (error) {
         console.error('Send message failed:', error)
         console.error('Send message failed status:', error.status)
