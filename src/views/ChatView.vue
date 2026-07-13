@@ -68,6 +68,8 @@ const MAIN_PANEL = {
   MYPAGE: 'mypage',
 }
 
+const ADMIN_DASHBOARD_PERMISSION = 'observability.dashboard.read'
+
 const PANEL_QUERY_VALUES = new Set(Object.values(MAIN_PANEL))
 
 const getPanelFromQuery = (panelQuery) => {
@@ -404,7 +406,9 @@ const profileHeaderText = computed(() => {
   return `${profileName.value} ${profileJobTitle.value}`.trim()
 })
 
-const canAccessAdminDashboard = computed(() => authStore.isOrgAdmin)
+const canAccessAdminDashboard = computed(() => {
+  return authStore.hasPermission(ADMIN_DASHBOARD_PERMISSION)
+})
 
 const isAnswering = computed(() => {
   return chatStore.sending

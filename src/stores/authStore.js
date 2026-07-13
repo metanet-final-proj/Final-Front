@@ -14,16 +14,15 @@ const normalizeToken = (token) => {
   return String(token).replace(/^"|"$/g, '').trim()
 }
 
-const normalizeRoles = (roles) => {
-  const roleList = Array.isArray(roles) ? roles : [roles]
+const normalizePermission = (permission) => {
+  return String(permission || '').trim().toLowerCase()
+}
 
-  return roleList
-    .map((role) => {
-      if (typeof role === 'string') return role
+const normalizePermissions = (permissions) => {
+  const permissionList = Array.isArray(permissions) ? permissions : [permissions]
 
-      return role?.name || role?.role || role?.authority || ''
-    })
-    .map((role) => String(role).trim().toUpperCase())
+  return permissionList
+    .map(normalizePermission)
     .filter(Boolean)
 }
 
@@ -66,10 +65,10 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     isAuthenticated: (state) => Boolean(state.accessToken),
 
-    userRoles: (state) => normalizeRoles(state.user?.roles),
+    userPermissions: (state) => normalizePermissions(state.user?.permissions),
 
-    isOrgAdmin() {
-      return this.userRoles.includes('ORG_ADMIN')
+    hasPermission() {
+      return (permission) => this.userPermissions.includes(normalizePermission(permission))
     },
 
     displayName: (state) => {
