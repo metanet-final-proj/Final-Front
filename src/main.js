@@ -7,6 +7,13 @@ import './styles/variables.css'
 import './styles/base.css'
 import './styles/layout.css'
 
+const THEME_STORAGE_KEY = 'officeLinkTheme'
+const storedTheme = localStorage.getItem(THEME_STORAGE_KEY)
+const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches
+const initialTheme = storedTheme || (prefersDark ? 'dark' : 'light')
+
+document.documentElement.dataset.theme = initialTheme
+
 const app = createApp(App)
 
 app.use(createPinia())

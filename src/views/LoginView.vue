@@ -67,7 +67,7 @@ onBeforeUnmount(() => {
   width: 980px;
   max-width: 100%;
   min-height: 640px;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   overflow: hidden;

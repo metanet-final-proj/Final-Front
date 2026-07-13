@@ -121,7 +121,6 @@ const selectedRange = ref(chartRanges[0])
             <span>Token Usage</span>
             <h2>토큰 사용량 그래프</h2>
           </div>
-          <strong>Line plot</strong>
         </div>
 
         <div class="chart-stage">
@@ -138,7 +137,6 @@ const selectedRange = ref(chartRanges[0])
             <span>Total Request</span>
             <h2>요청량 그래프</h2>
           </div>
-          <strong>Bar plot</strong>
         </div>
 
         <div class="chart-stage">
@@ -158,9 +156,9 @@ const selectedRange = ref(chartRanges[0])
   min-height: 0;
   overflow-y: auto;
   background:
-    radial-gradient(circle at 16% 0%, rgba(27, 67, 150, 0.16), transparent 34%),
-    radial-gradient(circle at 88% 8%, rgba(18, 165, 222, 0.16), transparent 30%),
-    linear-gradient(180deg, #f7faff 0%, #ffffff 62%);
+    radial-gradient(circle at 16% 0%, rgba(var(--color-primary-light-rgb), 0.16), transparent 34%),
+    radial-gradient(circle at 88% 8%, rgba(var(--color-sky-rgb), 0.16), transparent 30%),
+    linear-gradient(180deg, var(--color-page-gradient-start) 0%, var(--color-surface-raised) 62%);
   padding: 36px 44px 42px;
 }
 
@@ -193,9 +191,9 @@ const selectedRange = ref(chartRanges[0])
 }
 
 .kpi-card {
-  border: 1px solid rgba(227, 232, 242, 0.85);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 20px 48px rgba(23, 48, 110, 0.08);
+  border: 1px solid rgba(var(--color-border-muted-rgb), 0.85);
+  background: rgba(var(--color-white-rgb), 0.88);
+  box-shadow: 0 20px 48px rgba(var(--color-primary-rgb), 0.08);
   backdrop-filter: blur(12px);
   border-radius: 14px;
   padding: 16px 18px;
@@ -231,11 +229,11 @@ const selectedRange = ref(chartRanges[0])
   justify-self: end;
   align-self: end;
   min-width: 238px;
-  border: 1px solid rgba(227, 232, 242, 0.85);
-  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(var(--color-border-muted-rgb), 0.85);
+  background: rgba(var(--color-white-rgb), 0.84);
   border-radius: 999px;
   padding: 5px 6px 5px 14px;
-  box-shadow: 0 16px 34px rgba(23, 48, 110, 0.07);
+  box-shadow: 0 16px 34px rgba(var(--color-primary-rgb), 0.07);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -247,7 +245,7 @@ const selectedRange = ref(chartRanges[0])
   align-items: center;
   gap: 3px;
   border-radius: 999px;
-  background: #eef3fb;
+  background: var(--color-surface-muted);
   padding: 3px;
 }
 
@@ -264,13 +262,13 @@ const selectedRange = ref(chartRanges[0])
 
 .range-toggle-buttons button:hover {
   color: var(--color-primary-light);
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(var(--color-white-rgb), 0.66);
 }
 
 .range-toggle-buttons button.active {
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   color: var(--color-primary);
-  box-shadow: 0 6px 14px rgba(23, 48, 110, 0.12);
+  box-shadow: 0 6px 14px rgba(var(--color-primary-rgb), 0.12);
 }
 
 .profile-stack {
@@ -286,9 +284,9 @@ const selectedRange = ref(chartRanges[0])
   height: 104px;
   border-radius: 50%;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(234, 241, 254, 0.95));
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 24px 48px rgba(23, 48, 110, 0.12);
+    linear-gradient(145deg, rgba(var(--color-white-rgb), 0.95), rgba(234, 241, 254, 0.95));
+  border: 1px solid rgba(var(--color-white-rgb), 0.95);
+  box-shadow: 0 24px 48px rgba(var(--color-primary-rgb), 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -299,11 +297,11 @@ const selectedRange = ref(chartRanges[0])
 
 .profile-info-card {
   width: 100%;
-  border: 1px solid rgba(227, 232, 242, 0.86);
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(var(--color-border-muted-rgb), 0.86);
+  background: rgba(var(--color-white-rgb), 0.9);
   border-radius: 14px;
   padding: 18px;
-  box-shadow: 0 20px 48px rgba(23, 48, 110, 0.08);
+  box-shadow: 0 20px 48px rgba(var(--color-primary-rgb), 0.08);
 }
 
 .profile-info-card h1 {
@@ -338,10 +336,10 @@ const selectedRange = ref(chartRanges[0])
 }
 
 .chart-card {
-  border: 1px solid rgba(227, 232, 242, 0.88);
-  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(var(--color-border-muted-rgb), 0.88);
+  background: rgba(var(--color-white-rgb), 0.88);
   border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(23, 48, 110, 0.09);
+  box-shadow: 0 24px 60px rgba(var(--color-primary-rgb), 0.09);
   backdrop-filter: blur(12px);
   padding: 20px;
 }
@@ -369,16 +367,6 @@ const selectedRange = ref(chartRanges[0])
   color: var(--color-text);
   font-size: 16px;
   font-weight: 800;
-}
-
-.chart-card-header strong {
-  flex-shrink: 0;
-  border: 1px solid rgba(201, 210, 228, 0.75);
-  background: #f4f8ff;
-  border-radius: 999px;
-  padding: 6px 10px;
-  color: var(--color-primary-light);
-  font-size: 11.5px;
 }
 
 .chart-stage {

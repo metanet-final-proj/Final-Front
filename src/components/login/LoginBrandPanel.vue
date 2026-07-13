@@ -69,8 +69,8 @@ import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
 .brand-panel {
   width: 440px;
   flex-shrink: 0;
-  background: var(--color-primary);
-  color: var(--color-white);
+  background: var(--color-login-brand-bg);
+  color: var(--color-login-brand-text);
   padding: 48px 44px;
   display: flex;
   flex-direction: column;
@@ -115,7 +115,7 @@ import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
 .brand-description {
   margin: 12px 0 0;
   font-size: 14px;
-  color: #b9c6e4;
+  color: var(--color-login-brand-muted);
   line-height: 1.65;
 }
 
@@ -131,7 +131,7 @@ import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
   align-items: center;
   gap: 11px;
   font-size: 13.5px;
-  color: #dce4f5;
+  color: var(--color-login-brand-feature);
 }
 
 .check-icon {
@@ -139,7 +139,7 @@ import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
   height: 26px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.1);
-  color: #7fb8e8;
+  color: var(--color-login-brand-check);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -184,14 +184,14 @@ import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
   display: block;
   font-size: 13.5px;
   font-weight: 800;
-  color: var(--color-white);
+  color: var(--color-login-brand-text);
 }
 
 .auth-card p {
   margin: 5px 0 0;
   font-size: 12px;
   line-height: 1.55;
-  color: #c8d4ee;
+  color: var(--color-login-brand-card-text);
 }
 
 .system-status {
@@ -199,7 +199,7 @@ import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
   align-items: center;
   gap: 7px;
   font-size: 12.5px;
-  color: #b9c6e4;
+  color: var(--color-login-brand-muted);
 }
 
 .status-dot {

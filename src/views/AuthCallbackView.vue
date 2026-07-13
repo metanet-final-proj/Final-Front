@@ -88,7 +88,7 @@ const goLogin = () => {
   max-width: 100%;
   padding: 42px 36px;
   border-radius: 24px;
-  background: var(--color-white);
+  background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
   text-align: center;
