@@ -600,16 +600,16 @@ onBeforeUnmount(() => {
     grid-template-areas:
       "profile"
       "kpi"
+      "range"
       "chart"
       "request"
       "error";
   }
 
   .range-toggle {
-    grid-area: kpi;
+    grid-area: range;
     justify-self: stretch;
     align-self: auto;
-    margin-top: 94px;
   }
 
   .profile-stack {
@@ -627,7 +627,6 @@ onBeforeUnmount(() => {
   }
 
   .range-toggle {
-    margin-top: 12px;
     border-radius: 14px;
   }
 
