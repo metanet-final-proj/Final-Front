@@ -1,10 +1,16 @@
 import axios from 'axios'
+import {
+  attachAuthorizationHeader,
+  createAuthRefreshInterceptor,
+} from './authRefreshInterceptor.js'
+import { tokenStore } from '../stores/tokenStore.js'
 
+const viteEnv = import.meta.env || {}
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.DEV
+  baseURL: viteEnv.DEV
     ? ''
-    : import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080',
+    : viteEnv.VITE_API_BASE_URL || 'http://localhost:8080',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -12,15 +18,32 @@ const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   (config) => {
-    const accessToken = localStorage.getItem('accessToken')
-
-    if (accessToken) {
-      config.headers.Authorization = `Bearer ${accessToken}`
-    }
-
-    return config
+    return attachAuthorizationHeader(config, {
+      getAccessToken: () => tokenStore.getAccessToken(),
+      getTokenType: () => tokenStore.getTokenType(),
+    })
   },
   (error) => Promise.reject(error),
 )
+
+let authResponseInterceptorId = null
+
+export const configureAuthRefreshInterceptor = ({
+  refreshAccessToken,
+  clearAuth,
+}) => {
+  if (authResponseInterceptorId !== null) {
+    apiClient.interceptors.response.eject(authResponseInterceptorId)
+  }
+
+  authResponseInterceptorId = apiClient.interceptors.response.use(
+    (response) => response,
+    createAuthRefreshInterceptor({
+      refreshAccessToken,
+      retryRequest: (config) => apiClient(config),
+      clearAuth,
+    }),
+  )
+}
 
 export default apiClient

@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '../stores/authStore'
+import { useAuthStore } from '../stores/authStore.js'
+import { tokenStore } from '../stores/tokenStore.js'
+import { restoreAccessToken } from './authSession.js'
 import LoginView from '../views/LoginView.vue'
 import ChatView from '../views/ChatView.vue'
 import AuthCallbackView from '../views/AuthCallbackView.vue'
@@ -41,13 +43,7 @@ const router = createRouter({
 })
 
 const getAccessToken = () => {
-  const token = localStorage.getItem('accessToken')
-
-  if (!token) {
-    return ''
-  }
-
-  return token.replace(/^"|"$/g, '').trim()
+  return tokenStore.getAccessToken()
 }
 
 const clearAuthState = (authStore) => {
@@ -58,14 +54,7 @@ const clearAuthState = (authStore) => {
 
   authStore.user = null
   authStore.employeeProfile = null
-
-  if ('accessToken' in authStore) {
-    authStore.accessToken = null
-  }
-
-  if ('refreshToken' in authStore) {
-    authStore.refreshToken = null
-  }
+  tokenStore.clear()
 
   localStorage.removeItem('accessToken')
   localStorage.removeItem('refreshToken')
@@ -78,9 +67,12 @@ const hasValidUserContext = (authStore) => {
 
 const ensureAuthenticated = async () => {
   const authStore = useAuthStore()
-  const accessToken = getAccessToken()
+  const hasAccessToken = await restoreAccessToken({
+    getAccessToken,
+    refreshAccessToken: () => authStore.refreshAccessToken(),
+  })
 
-  if (!accessToken) {
+  if (!hasAccessToken) {
     clearAuthState(authStore)
     return false
   }
@@ -129,12 +121,6 @@ router.beforeEach(async (to) => {
   }
 
   if (to.path === '/login') {
-    const accessToken = getAccessToken()
-
-    if (!accessToken) {
-      return true
-    }
-
     const authenticated = await ensureAuthenticated()
 
     if (authenticated) {
