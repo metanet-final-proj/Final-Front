@@ -190,9 +190,10 @@ export const chatApi = {
     return apiClient.get(`/api/v1/chat/conversations/${conversationId}/messages`)
   },
 
-  async sendMessageStream(conversationId, message, handlers = {}) {
+  async sendMessageStream(conversationId, message, handlers = {}, requestOptions = {}) {
     const baseUrl = getApiBaseUrl()
     const authStore = useAuthStore()
+    const idempotencyKey = requestOptions.idempotencyKey || `idem_${crypto.randomUUID()}`
 
     await authStore.ensureFreshAccessToken()
 
@@ -203,6 +204,7 @@ export const chatApi = {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
+          'Idempotency-Key': idempotencyKey,
           ...getAuthHeaders(),
         },
         body: JSON.stringify({
@@ -215,6 +217,14 @@ export const chatApi = {
 
     if (response.status === 401) {
       await authStore.refreshAccessToken()
+      response = await sendRequest()
+    }
+
+    let processingRetries = 0
+    while (response.status === 202 && processingRetries < 3) {
+      const retryAfterSeconds = Number(response.headers.get('Retry-After')) || 2
+      await new Promise((resolve) => setTimeout(resolve, retryAfterSeconds * 1000))
+      processingRetries += 1
       response = await sendRequest()
     }
 

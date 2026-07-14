@@ -695,6 +695,7 @@ export const useChatStore = defineStore('chat', {
       this.appendLocalMessage(conversationId, localAssistantMessage)
 
       this.sending = true
+      const idempotencyKey = `idem_${crypto.randomUUID()}`
 
       try {
         await chatApi.sendMessageStream(conversationId, trimmedMessage, {
@@ -816,7 +817,7 @@ export const useChatStore = defineStore('chat', {
               activityPatch,
             )
           },      
-        })
+        }, { idempotencyKey })
 
         if (!hasReceivedFirstChunk && !hasReceivedAssistantMessage) {
           this.patchLocalMessage(conversationId, localAssistantMessageId, {
