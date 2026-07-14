@@ -338,6 +338,13 @@ const isAnswering = computed(() => {
   return chatStore.sending
 })
 
+watch(isAnswering, async (isNowAnswering, wasAnswering) => {
+  if (!wasAnswering || isNowAnswering || mainPanel.value !== MAIN_PANEL.CHAT) return
+
+  await nextTick()
+  composerInputRef.value?.focus({ preventScroll: true })
+})
+
 const isVoiceBusy = computed(() => {
   return isRecording.value || isTranscribing.value
 })
@@ -946,8 +953,8 @@ onBeforeUnmount(() => {
           ref="composerInputRef"
           v-model="draft"
           rows="1"
-          :disabled="isAnswering || isTranscribing"
-          :placeholder="isTranscribing ? '음성을 텍스트로 변환하는 중입니다.' : '업무 요청을 입력해 주세요.'"
+          :disabled="isTranscribing"
+          :placeholder="isTranscribing ? '음성을 텍스트로 변환하는 중입니다.' : isAnswering ? '답변 생성 중입니다.' : '업무 요청을 입력해 주세요.'"
           @input="resizeComposer"
           @keydown="handleComposerKeydown"
         ></textarea>
@@ -1151,8 +1158,8 @@ onBeforeUnmount(() => {
           ref="composerInputRef"
           v-model="draft"
           rows="1"
-          :disabled="isAnswering || isTranscribing"
-          :placeholder="isTranscribing ? '음성을 텍스트로 변환하는 중입니다.' : isAnswering ? '답변 생성 중입니다. 잠시만 기다려 주세요.' : '채팅을 입력해 주세요.'"
+          :disabled="isTranscribing"
+          :placeholder="isTranscribing ? '음성을 텍스트로 변환하는 중입니다.' : isAnswering ? '답변 생성 중입니다.' : '채팅을 입력해 주세요.'"
           @input="resizeComposer"
           @keydown="handleComposerKeydown"
         ></textarea>

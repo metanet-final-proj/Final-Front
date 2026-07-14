@@ -21,3 +21,21 @@ test('both send buttons use a centered upward arrow', () => {
     /\.send-icon\s*\{[^}]*transform:\s*translate/,
   )
 })
+
+test('answering keeps the composer editable while send stays disabled', () => {
+  assert.equal(
+    chatViewSource.match(/:disabled="isTranscribing"/g)?.length,
+    2,
+  )
+  assert.equal(
+    chatViewSource.match(/:disabled="isAnswering \|\| isTranscribing"/g)?.length,
+    2,
+  )
+})
+
+test('composer focus returns after the answer finishes', () => {
+  assert.match(
+    chatViewSource,
+    /watch\(\s*isAnswering,\s*async \(isNowAnswering, wasAnswering\) => \{[\s\S]*?mainPanel\.value !== MAIN_PANEL\.CHAT[\s\S]*?await nextTick\(\)[\s\S]*?composerInputRef\.value\?\.focus\(\{ preventScroll: true \}\)/,
+  )
+})
