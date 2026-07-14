@@ -6,6 +6,10 @@ const chatViewSource = readFileSync(
   new URL('../src/views/ChatView.vue', import.meta.url),
   'utf8',
 )
+const chatStoreSource = readFileSync(
+  new URL('../src/stores/chatStore.js', import.meta.url),
+  'utf8',
+)
 
 test('both send buttons use a centered upward arrow', () => {
   assert.equal(chatViewSource.match(/class="send-button"/g)?.length, 2)
@@ -37,5 +41,17 @@ test('composer focus returns after the answer finishes', () => {
   assert.match(
     chatViewSource,
     /watch\(\s*isAnswering,\s*async \(isNowAnswering, wasAnswering\) => \{[\s\S]*?mainPanel\.value !== MAIN_PANEL\.CHAT[\s\S]*?await nextTick\(\)[\s\S]*?composerInputRef\.value\?\.focus\(\{ preventScroll: true \}\)/,
+  )
+})
+
+test('only the active conversation is disabled while its answer is streaming', () => {
+  assert.match(
+    chatViewSource,
+    /chatStore\.isConversationAnswering\(activeRoomId\.value\)/,
+  )
+  assert.doesNotMatch(chatViewSource, /chatStore\.sending/)
+  assert.match(
+    chatStoreSource,
+    /async sendMessage\(conversationId, message\) \{[\s\S]*?this\.isConversationAnswering\(conversationId\)[\s\S]*?return \[\]/,
   )
 })

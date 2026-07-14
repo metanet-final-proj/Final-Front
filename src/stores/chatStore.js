@@ -320,7 +320,6 @@ export const useChatStore = defineStore('chat', {
     creating: false,
     updating: false,
     deleting: false,
-    sending: false,
   }),
 
   getters: {
@@ -362,6 +361,12 @@ export const useChatStore = defineStore('chat', {
           messages: getInitialMessages(),
         }
       )
+    },
+
+    isConversationAnswering: (state) => (conversationId) => {
+      if (!conversationId) return false
+
+      return state.inFlightByConversationId[String(conversationId)]?.status === 'streaming'
     },
   },
 
@@ -713,7 +718,13 @@ export const useChatStore = defineStore('chat', {
     },
 
     async sendMessage(conversationId, message) {
-      if (!conversationId || !message.trim()) return []
+      if (
+        !conversationId ||
+        !message.trim() ||
+        this.isConversationAnswering(conversationId)
+      ) {
+        return []
+      }
 
       const trimmedMessage = message.trim()
       const localUserMessageId = `local-user-${Date.now()}`
@@ -753,8 +764,6 @@ export const useChatStore = defineStore('chat', {
       this.appendLocalMessage(conversationId, localUserMessage)
       this.appendLocalMessage(conversationId, localAssistantMessage)
       this.startConversationInFlight(conversationId, localAssistantMessageId)
-
-      this.sending = true
 
       try {
         await chatApi.sendMessageStream(conversationId, trimmedMessage, {
@@ -867,8 +876,6 @@ export const useChatStore = defineStore('chat', {
         } else {
           this.finishConversationInFlight(conversationId)
         }
-
-        this.sending = false
       }
     },
   },

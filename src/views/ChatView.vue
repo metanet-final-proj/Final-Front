@@ -335,7 +335,7 @@ const canAccessAdminDashboard = computed(() => {
 })
 
 const isAnswering = computed(() => {
-  return chatStore.sending
+  return chatStore.isConversationAnswering(activeRoomId.value)
 })
 
 watch(isAnswering, async (isNowAnswering, wasAnswering) => {
