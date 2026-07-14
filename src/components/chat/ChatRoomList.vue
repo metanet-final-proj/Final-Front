@@ -148,7 +148,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="!collapsed && chatStore.loading" class="room-loading">
+  <div v-if="!collapsed && chatStore.loading && rooms.length === 0" class="room-loading">
     채팅을 불러오는 중입니다.
   </div>
 
@@ -181,6 +181,15 @@ onBeforeUnmount(() => {
             @keydown.esc.stop.prevent="cancelEditRoomTitle"
           />
           <span v-else class="room-title-text">{{ room.title }}</span>
+          <span
+            v-if="room.isAnswering"
+            class="room-answering"
+            role="status"
+            aria-label="에이전트 답변 생성 중"
+          >
+            <span class="room-answering-spinner" aria-hidden="true"></span>
+            <span>답변 중</span>
+          </span>
         </div>
       </div>
 
@@ -406,7 +415,40 @@ onBeforeUnmount(() => {
 .room-top {
   display: flex;
   align-items: center;
+  gap: 6px;
   min-width: 0;
+}
+
+.room-answering {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-primary);
+  font-size: 10.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.room-answering-spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--color-primary-soft);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: room-answering-spin 0.8s linear infinite;
+}
+
+@keyframes room-answering-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-answering-spinner {
+    animation: none;
+  }
 }
 
 .room-title-text {

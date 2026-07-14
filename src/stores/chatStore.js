@@ -1,5 +1,9 @@
 import { defineStore } from 'pinia'
 import { chatApi } from '../api/chatApi'
+import {
+  hasTrackedAssistantMessage,
+  mergeFetchedMessagesWithInFlight,
+} from './chatMessageMerge.js'
 
 const nowTime = () => {
   const date = new Date()
@@ -310,6 +314,7 @@ export const useChatStore = defineStore('chat', {
     conversations: [],
     activeConversationId: null,
     messagesByConversationId: {},
+    inFlightByConversationId: {},
     loading: false,
     messagesLoading: false,
     creating: false,
@@ -324,6 +329,7 @@ export const useChatStore = defineStore('chat', {
         const conversationId = conversation.conversationId
         const key = String(conversationId)
         const messages = state.messagesByConversationId[key]
+        const inFlight = state.inFlightByConversationId[key]
 
         return {
           id: conversationId,
@@ -333,6 +339,7 @@ export const useChatStore = defineStore('chat', {
           createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt,
           lastMessageAt: conversation.lastMessageAt,
+          isAnswering: inFlight?.status === 'streaming',
           messages:
             messages && messages.length > 0
               ? messages
@@ -361,6 +368,69 @@ export const useChatStore = defineStore('chat', {
   actions: {
     setActiveConversation(conversationId) {
       this.activeConversationId = conversationId
+    },
+
+    startConversationInFlight(conversationId, assistantMessageId) {
+      if (!conversationId || !assistantMessageId) return
+
+      const key = String(conversationId)
+
+      this.inFlightByConversationId = {
+        ...this.inFlightByConversationId,
+        [key]: {
+          conversationId,
+          assistantMessageId,
+          status: 'streaming',
+          startedAt: new Date().toISOString(),
+        },
+      }
+    },
+
+    updateInFlightAssistantMessageId(conversationId, assistantMessageId) {
+      if (!conversationId || !assistantMessageId) return
+
+      const key = String(conversationId)
+      const current = this.inFlightByConversationId[key]
+
+      if (!current) return
+
+      this.inFlightByConversationId = {
+        ...this.inFlightByConversationId,
+        [key]: {
+          ...current,
+          assistantMessageId,
+        },
+      }
+    },
+
+    completeConversationInFlight(conversationId) {
+      if (!conversationId) return
+
+      const key = String(conversationId)
+      const current = this.inFlightByConversationId[key]
+
+      if (!current) return
+
+      this.inFlightByConversationId = {
+        ...this.inFlightByConversationId,
+        [key]: {
+          ...current,
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+        },
+      }
+    },
+
+    finishConversationInFlight(conversationId) {
+      if (!conversationId) return
+
+      const key = String(conversationId)
+
+      if (!this.inFlightByConversationId[key]) return
+
+      const nextInFlight = { ...this.inFlightByConversationId }
+      delete nextInFlight[key]
+      this.inFlightByConversationId = nextInFlight
     },
 
     async fetchConversations() {
@@ -492,26 +562,46 @@ export const useChatStore = defineStore('chat', {
     async fetchMessages(conversationId) {
       if (!conversationId) return []
 
+      const key = String(conversationId)
       this.messagesLoading = true
 
       try {
         const response = await chatApi.listMessages(conversationId)
-        const messages = extractMessages(response.data)
+        const serverMessages = extractMessages(response.data)
+        const inFlight = this.inFlightByConversationId[key]
+        const messages = mergeFetchedMessagesWithInFlight(
+          serverMessages,
+          this.messagesByConversationId[key],
+          inFlight,
+        )
 
         this.messagesByConversationId = {
           ...this.messagesByConversationId,
-          [String(conversationId)]: messages,
+          [key]: messages,
+        }
+
+        if (
+          inFlight?.status === 'completed' &&
+          hasTrackedAssistantMessage(serverMessages, inFlight)
+        ) {
+          this.finishConversationInFlight(conversationId)
         }
 
         return messages
       } catch (error) {
         if (error.response?.status === 404) {
+          const messages = mergeFetchedMessagesWithInFlight(
+            [],
+            this.messagesByConversationId[key],
+            this.inFlightByConversationId[key],
+          )
+
           this.messagesByConversationId = {
             ...this.messagesByConversationId,
-            [String(conversationId)]: [],
+            [key]: messages,
           }
 
-          return []
+          return messages
         }
 
         throw error
@@ -549,6 +639,8 @@ export const useChatStore = defineStore('chat', {
       const currentMessages = this.messagesByConversationId[key] || []
       const normalized = normalizeMessage(serverMessage)
 
+      let replacement = null
+
       this.messagesByConversationId = {
         ...this.messagesByConversationId,
         [key]: currentMessages.map((message) => {
@@ -556,12 +648,16 @@ export const useChatStore = defineStore('chat', {
             return message
           }
 
-          return {
+          replacement = {
             ...normalized,
             agentActivity: normalized.agentActivity || message.agentActivity || null,
           }
+
+          return replacement
         }),
       }
+
+      return replacement
     },
 
     updateLocalMessageText(conversationId, localMessageId, updater) {
@@ -656,6 +752,7 @@ export const useChatStore = defineStore('chat', {
 
       this.appendLocalMessage(conversationId, localUserMessage)
       this.appendLocalMessage(conversationId, localAssistantMessage)
+      this.startConversationInFlight(conversationId, localAssistantMessageId)
 
       this.sending = true
 
@@ -694,7 +791,7 @@ export const useChatStore = defineStore('chat', {
           onAssistantMessage: (data) => {
             hasReceivedAssistantMessage = true
             agentActivity = completeAgentActivity(agentActivity)
-            this.replaceLocalMessage(
+            const assistantMessage = this.replaceLocalMessage(
               conversationId,
               localAssistantMessageId,
               {
@@ -702,6 +799,13 @@ export const useChatStore = defineStore('chat', {
                 agentActivity,
               },
             )
+
+            if (assistantMessage?.id) {
+              this.updateInFlightAssistantMessageId(
+                conversationId,
+                assistantMessage.id,
+              )
+            }
           },
 
           onError: (data) => {
@@ -754,8 +858,16 @@ export const useChatStore = defineStore('chat', {
           agentActivity: completeAgentActivity(agentActivity),
         })
 
+        this.finishConversationInFlight(conversationId)
+
         throw error
       } finally {
+        if (hasReceivedAssistantMessage) {
+          this.completeConversationInFlight(conversationId)
+        } else {
+          this.finishConversationInFlight(conversationId)
+        }
+
         this.sending = false
       }
     },
