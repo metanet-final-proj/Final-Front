@@ -14,6 +14,18 @@ const normalizeToken = (token) => {
   return String(token).replace(/^"|"$/g, '').trim()
 }
 
+const normalizePermission = (permission) => {
+  return String(permission || '').trim().toLowerCase()
+}
+
+const normalizePermissions = (permissions) => {
+  const permissionList = Array.isArray(permissions) ? permissions : [permissions]
+
+  return permissionList
+    .map(normalizePermission)
+    .filter(Boolean)
+}
+
 const decodeJwtPayload = (token) => {
   const [, payload] = token.split('.')
 
@@ -52,6 +64,12 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isAuthenticated: (state) => Boolean(state.accessToken),
+
+    userPermissions: (state) => normalizePermissions(state.user?.permissions),
+
+    hasPermission() {
+      return (permission) => this.userPermissions.includes(normalizePermission(permission))
+    },
 
     displayName: (state) => {
       return state.user?.displayName || '사용자'
