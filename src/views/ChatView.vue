@@ -15,6 +15,7 @@ import { useWorkhubStore } from '../stores/workhubStore'
 import { speechApi } from '../api/speechApi'
 import AdminDashboardPanel from '../components/admin/AdminDashboardPanel.vue'
 import ChatSidebar from '../components/chat/ChatSidebar.vue'
+import WorkhubDetailPanel from '../components/chat/WorkhubDetailPanel.vue'
 import MyPagePanel from '../components/mypage/MyPagePanel.vue'
 
 const router = useRouter()
@@ -121,6 +122,7 @@ const mainPanel = ref(MAIN_PANEL.CHAT)
 const panelKey = ref(null)
 const threadRef = ref(null)
 const composerInputRef = ref(null)
+const chatSidebarRef = ref(null)
 const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
 const composingNewChat = ref(true)
@@ -195,27 +197,6 @@ const starterCards = [
 ]
 
 const panels = computed(() => workhubStore.panelsByKey)
-
-const parseMealMenus = (description = '') => {
-  const mealLabels = ['아침', '점심', '저녁']
-
-  return mealLabels.map((label, index) => {
-    const nextLabel = mealLabels[index + 1]
-    const pattern = nextLabel
-      ? new RegExp(`${label}:\\s*(.*?)\\s*/\\s*${nextLabel}:`)
-      : new RegExp(`${label}:\\s*(.*)$`)
-    const match = description.match(pattern)
-    const menu = match?.[1]?.trim() || '-'
-
-    return {
-      label,
-      menu,
-      empty: menu === '-',
-    }
-  })
-}
-
-const isMenuPanel = computed(() => currentPanel.value?.key === 'menu')
 
 const redirectToLogin = async () => {
   if (typeof authStore.clearAuth === 'function') {
@@ -679,6 +660,12 @@ const closePanel = () => {
   panelKey.value = null
 }
 
+const closePanelAndRestoreFocus = async () => {
+  closePanel()
+  await nextTick()
+  chatSidebarRef.value?.focusMobileTrigger?.()
+}
+
 const refreshWorkhubSidebar = async () => {
   try {
     await workhubStore.fetchSidebarSummary()
@@ -876,6 +863,7 @@ onBeforeUnmount(() => {
 
     <div class="chat-body">
       <ChatSidebar
+        ref="chatSidebarRef"
         :can-access-admin-dashboard="canAccessAdminDashboard"
         :is-answering="isAnswering"
         :logout-loading="logoutLoading"
@@ -966,6 +954,7 @@ onBeforeUnmount(() => {
 
         <button
           type="button"
+          aria-label="메시지 전송"
           :disabled="isAnswering || isTranscribing"
           @click="sendMessage()"
           class="send-button"
@@ -981,8 +970,8 @@ onBeforeUnmount(() => {
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <path d="M22 2L15 22l-4-9-9-4 20-7z" />
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
           </svg>
         </button>
       </div>
@@ -1170,10 +1159,13 @@ onBeforeUnmount(() => {
 
         <button
           type="button"
+          aria-label="메시지 전송"
           :disabled="isAnswering || isTranscribing"
           @click="sendMessage()"
+          class="send-button"
         >
           <svg
+            class="send-icon"
             width="17"
             height="17"
             viewBox="0 0 24 24"
@@ -1183,8 +1175,8 @@ onBeforeUnmount(() => {
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <path d="M22 2L15 22l-4-9-9-4 20-7z" />
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
           </svg>
         </button>
       </div>
@@ -1195,64 +1187,12 @@ onBeforeUnmount(() => {
   </template>
 </main>
 
-      <aside v-if="currentPanel" class="detail-panel">
-        <div class="detail-header">
-          <h2>{{ currentPanel.title }}</h2>
-          <span>{{ currentPanel.badge }}</span>
-
-          <button type="button" @click="closePanel">
-            ×
-          </button>
-        </div>
-
-        <div class="detail-content">
-          <article
-            v-for="(item, index) in currentPanel.items"
-            :key="`${currentPanel.key}-${item.title}-${item.meta}-${index}`"
-            class="panel-item"
-          >
-            <div class="panel-item-top">
-              <h3>{{ item.title }}</h3>
-              <span
-                v-if="item.badge"
-                class="panel-badge"
-                :class="item.tone"
-              >
-                {{ item.badge }}
-              </span>
-            </div>
-
-            <div v-if="isMenuPanel" class="meal-menu-list">
-              <div
-                v-for="meal in parseMealMenus(item.desc)"
-                :key="`${item.title}-${meal.label}`"
-                class="meal-menu-row"
-                :class="{ empty: meal.empty }"
-              >
-                <span class="meal-label">{{ meal.label }}</span>
-                <strong>{{ meal.menu }}</strong>
-              </div>
-            </div>
-            <p v-else>{{ item.desc }}</p>
-            <small>{{ item.meta }}</small>
-          </article>
-
-          <div v-if="currentPanel.items.length === 0" class="empty-panel">
-            <div>🚗</div>
-            <p>{{ currentPanel.emptyText }}</p>
-          </div>
-        </div>
-
-        <div class="detail-footer">
-          <button
-            type="button"
-            :disabled="businessActionLoading"
-            @click="runPanelAction"
-          >
-            {{ businessActionLoading ? '처리 중...' : currentPanel.actionLabel }}
-          </button>
-        </div>
-      </aside>
+      <WorkhubDetailPanel
+        :panel="currentPanel"
+        :action-loading="businessActionLoading"
+        @action="runPanelAction"
+        @close="closePanelAndRestoreFocus"
+      />
     </div>
   </div>
 </template>
@@ -2120,6 +2060,16 @@ onBeforeUnmount(() => {
   opacity: 0.75;
 }
 
+.send-button {
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.send-icon {
+  display: block;
+}
+
 @keyframes voiceRecordingPulse {
   0%,
   100% {
@@ -2143,234 +2093,6 @@ onBeforeUnmount(() => {
   text-align: center;
   font-size: 11px;
   color: var(--color-placeholder);
-}
-
-.detail-panel {
-  width: 336px;
-  flex-shrink: 0;
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.detail-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 18px 18px 14px;
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.detail-header h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--color-primary);
-}
-
-.detail-header > span {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--color-primary-light);
-  background: var(--color-primary-soft);
-  border: 1px solid var(--color-primary-border-muted);
-  border-radius: 999px;
-  padding: 3px 10px;
-}
-
-.detail-header button {
-  margin-left: auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--color-muted);
-  font-size: 20px;
-  line-height: 1;
-}
-
-.detail-header button:hover {
-  background: var(--color-bg);
-}
-
-.detail-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.panel-item {
-  border: 1px solid var(--color-panel-border);
-  background: var(--color-surface-subtle);
-  border-radius: 12px;
-  padding: 14px 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.panel-item-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.panel-item h3 {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 800;
-  color: var(--color-text);
-}
-
-.panel-item p {
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--color-text-secondary);
-  line-height: 1.55;
-}
-
-.meal-menu-list {
-  display: grid;
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.meal-menu-row {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  align-items: start;
-  gap: 8px;
-  border: 1px solid var(--color-panel-border-soft);
-  border-radius: 8px;
-  background: var(--color-meal-bg);
-  padding: 8px 9px;
-}
-
-.meal-menu-row.empty {
-  background: var(--color-meal-empty-bg);
-}
-
-.meal-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 22px;
-  border-radius: 6px;
-  background: var(--color-meal-label-bg);
-  color: var(--color-meal-label-text);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.meal-menu-row strong {
-  min-width: 0;
-  color: var(--color-meal-text);
-  font-size: 12.5px;
-  font-weight: 700;
-  line-height: 1.55;
-  overflow-wrap: anywhere;
-}
-
-.meal-menu-row.empty .meal-label {
-  background: var(--color-meal-empty-label-bg);
-  color: var(--color-meal-empty-label-text);
-}
-
-.meal-menu-row.empty strong {
-  color: var(--color-meal-empty-text);
-  font-weight: 600;
-}
-
-.panel-item small {
-  font-size: 11.5px;
-  color: var(--color-subtle);
-}
-
-.panel-badge {
-  flex-shrink: 0;
-  border-radius: 999px;
-  padding: 3px 9px;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.panel-badge.blue {
-  color: var(--color-primary-light);
-  background: var(--color-primary-soft);
-  border: 1px solid var(--color-primary-border-muted);
-}
-
-.panel-badge.green {
-  color: var(--color-green);
-  background: var(--color-success-bg);
-  border: 1px solid var(--color-success-border);
-}
-
-.panel-badge.yellow {
-  color: var(--color-warning-text);
-  background: var(--color-warning-bg);
-  border: 1px solid var(--color-warning-border);
-}
-
-.panel-badge.gray {
-  color: var(--color-muted);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-}
-
-.empty-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 34px 0 26px;
-  text-align: center;
-}
-
-.empty-panel div {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: var(--color-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.empty-panel p {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-muted);
-  white-space: pre-line;
-}
-
-.detail-footer {
-  padding: 14px 18px 18px;
-  border-top: 1px solid var(--color-border-light);
-}
-
-.detail-footer button {
-  width: 100%;
-  border: none;
-  background: var(--color-primary-light);
-  color: var(--color-white);
-  font-size: 13.5px;
-  font-weight: 700;
-  border-radius: 11px;
-  padding: 12px;
-}
-
-.detail-footer button:hover {
-  background: var(--color-primary);
 }
 
 @media (max-width: 1100px) {
@@ -2423,9 +2145,6 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  .detail-panel {
-    width: 300px;
-  }
 }
 
 @media (max-width: 820px) {
@@ -2460,17 +2179,7 @@ onBeforeUnmount(() => {
 .send-button {
   width: 40px;
   height: 40px;
-  padding: 0;
   border: none;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.send-icon {
-  display: block;
-  transform: translate(-2px, 1px);
 }
 
 .start-composer textarea {
@@ -2513,10 +2222,6 @@ onBeforeUnmount(() => {
 
   .welcome-top p {
     font-size: 12.5px;
-  }
-
-  .detail-panel {
-    display: none;
   }
 
   .thread-area {

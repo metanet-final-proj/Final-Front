@@ -515,6 +515,7 @@ onBeforeUnmount(() => {
 }
 
 .chart-card {
+  min-width: 0;
   border: 1px solid rgba(var(--color-border-muted-rgb), 0.88);
   background: rgba(var(--color-white-rgb), 0.88);
   border-radius: 16px;
@@ -549,6 +550,7 @@ onBeforeUnmount(() => {
 }
 
 .chart-stage {
+  min-width: 0;
   height: 190px;
   position: relative;
   border: 1px solid rgba(var(--color-border-muted-rgb), 0.42);

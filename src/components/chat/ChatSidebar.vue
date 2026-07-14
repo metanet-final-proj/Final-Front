@@ -99,6 +99,13 @@ const restoreMobileTriggerFocus = async () => {
   mobileTriggerRef.value?.focus()
 }
 
+const focusMobileTrigger = () => {
+  if (!isMobile.value) return
+  return restoreMobileTriggerFocus()
+}
+
+defineExpose({ focusMobileTrigger })
+
 const closeMobileDrawer = async ({ restoreFocus = true } = {}) => {
   const wasOpen = presentation.value.isDrawerOpen
   close()
@@ -125,8 +132,8 @@ const toggleSidebar = () => {
 }
 
 const emitAndClose = (eventName, payload) => {
-  emit(eventName, payload)
   closeMobileDrawer({ restoreFocus: false })
+  emit(eventName, payload)
 }
 
 const handleCreateNewChat = () => emitAndClose('create-new-chat')
