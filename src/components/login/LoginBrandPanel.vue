@@ -1,5 +1,6 @@
 <script setup>
 import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
+import loginIcon2 from '../../assets/images/officelink-logo-nobg3.svg'
 </script>
 
 <template>
@@ -44,7 +45,7 @@ import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
       <div class="auth-icon-box">
         <img
           class="auth-icon-image"
-          :src="loginIcon"
+          :src="loginIcon2"
           alt="통합 인증 아이콘"
         />
       </div>
@@ -58,10 +59,6 @@ import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
       </div>
     </div>
 
-    <div class="system-status">
-      <span class="status-dot"></span>
-      전 시스템 정상 운영 중
-    </div>
   </aside>
 </template>
 
@@ -213,6 +210,10 @@ import loginIcon from '../../assets/images/officelink-logo-nobg.svg'
 @media (max-width: 860px) {
   .brand-panel {
     width: 100%;
+  }
+
+  .brand-spacer {
+    flex: 0 0 32px;
   }
 }
 </style>

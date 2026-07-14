@@ -1,6 +1,6 @@
 :root {
-    --color-primary: #17306e;
-    --color-primary-light: #1b4396;
+    --color-primary: #1C4D8D;
+    --color-primary-light: #4988C4;
     --color-primary-soft: #eaf1fe;
     --color-primary-rgb: 23, 48, 110;
     --color-primary-light-rgb: 27, 67, 150;
@@ -87,7 +87,7 @@
     --color-warning-bg: #fdf7e7;
     --color-warning-border: #f3e4b8;
 
-    --color-login-brand-bg: #17306e;
+    --color-login-brand-bg: #0F2854;
     --color-login-brand-text: #ffffff;
     --color-login-brand-muted: #b9c6e4;
     --color-login-brand-feature: #dce4f5;

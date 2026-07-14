@@ -1,8 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import chatbotLogo from '../assets/images/officelink-logo.svg'
-import chatbotLogo2 from '../assets/images/officelink-logo-nobg.svg'
+import chatbotLogo from '../assets/images/officelink-logo3.svg'
+import chatbotLogo2 from '../assets/images/officelink-logo-nobg3.svg'
 import loopIcon from '../assets/images/loop.svg'
 import loadingIcon from '../assets/images/loading.svg'
 import checkAllIcon from '../assets/images/check-all.svg'
