@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import loginIcon from '../../assets/images/officelink-logo-title-wide-nobg.svg'
+import loginIcon2 from '../../assets/images/officelink-logo-title-wide3.svg'
 
 const loading = ref(false)
 const error = ref('')
@@ -27,7 +28,7 @@ const loginWithAzure = () => {
     <div class="logo-row">
       <img
         class="logo-image"
-        :src="loginIcon"
+        :src="loginIcon2"
         alt="서비스 로고"
       />
 
@@ -62,9 +63,6 @@ const loginWithAzure = () => {
         {{ loading ? '인증 페이지로 이동 중...' : '사내 계정으로 계속하기' }}
       </button>
 
-      <p class="sub-guide">
-        인증이 완료되면 메인 채팅 화면으로 이동합니다.
-      </p>
     </div>
 
     <div class="form-spacer"></div>
@@ -101,7 +99,7 @@ const loginWithAzure = () => {
 }
 
 .logo-image {
-  width: 120px;
+  width: 150px;
   height: 38px;
   object-fit: contain;
   display: block;

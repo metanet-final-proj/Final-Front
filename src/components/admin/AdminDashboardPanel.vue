@@ -413,7 +413,6 @@ onBeforeUnmount(() => {
       <header class="admin-heading">
         <p>Admin</p>
         <h1 id="admin-dashboard-title">관리자 대시보드</h1>
-        <small class="kpi-period-note">상단 카드는 이번달 기준이며 지난달 대비 변화량을 표시합니다.</small>
       </header>
 
       <section class="admin-kpi-card" aria-label="관리자 KPI">

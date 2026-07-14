@@ -515,6 +515,7 @@ onBeforeUnmount(() => {
 }
 
 .chart-card {
+  min-width: 0;
   border: 1px solid rgba(var(--color-border-muted-rgb), 0.88);
   background: rgba(var(--color-white-rgb), 0.88);
   border-radius: 16px;
@@ -549,6 +550,7 @@ onBeforeUnmount(() => {
 }
 
 .chart-stage {
+  min-width: 0;
   height: 190px;
   position: relative;
   border: 1px solid rgba(var(--color-border-muted-rgb), 0.42);
@@ -600,16 +602,16 @@ onBeforeUnmount(() => {
     grid-template-areas:
       "profile"
       "kpi"
+      "range"
       "chart"
       "request"
       "error";
   }
 
   .range-toggle {
-    grid-area: kpi;
+    grid-area: range;
     justify-self: stretch;
     align-self: auto;
-    margin-top: 94px;
   }
 
   .profile-stack {
@@ -627,7 +629,6 @@ onBeforeUnmount(() => {
   }
 
   .range-toggle {
-    margin-top: 12px;
     border-radius: 14px;
   }
 
