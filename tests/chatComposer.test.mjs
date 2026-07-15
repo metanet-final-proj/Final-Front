@@ -10,6 +10,10 @@ const chatStoreSource = readFileSync(
   new URL('../src/stores/chatStore.js', import.meta.url),
   'utf8',
 )
+const routerSource = readFileSync(
+  new URL('../src/router/index.js', import.meta.url),
+  'utf8',
+)
 
 test('both send buttons use a centered upward arrow', () => {
   assert.equal(chatViewSource.match(/class="send-button"/g)?.length, 2)
@@ -53,5 +57,26 @@ test('only the active conversation is disabled while its answer is streaming', (
   assert.match(
     chatStoreSource,
     /async sendMessage\(conversationId, message\) \{[\s\S]*?this\.isConversationAnswering\(conversationId\)[\s\S]*?return \[\]/,
+  )
+})
+
+test('chat URLs retain the conversation id for refresh restoration', () => {
+  assert.match(routerSource, /path:\s*['"]\/chat\/:conversationId\?['"]/)
+  assert.match(chatViewSource, /route\.params\.conversationId/)
+  assert.match(chatViewSource, /await activateConversation\(routeConversationId\)/)
+})
+
+test('stream auto-follow pauses when the user scrolls away from the bottom', () => {
+  assert.match(
+    chatViewSource,
+    /const handleThreadScroll = \(\) => \{\s*autoFollowThread\.value = isThreadNearBottom\(\)/,
+  )
+  assert.match(
+    chatViewSource,
+    /if \(scrollAnimationFrameId \|\| !autoFollowThread\.value\) return/,
+  )
+  assert.match(
+    chatViewSource,
+    /@scroll\.passive="handleThreadScroll"/,
   )
 })

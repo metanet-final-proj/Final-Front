@@ -267,6 +267,7 @@ const normalizeMessage = (message) => {
     content,
     tag: message.tag || null,
     agentActivity: message.agentActivity || null,
+    actionDraft: message.actionDraft || message.action_draft || null,
     createdAt,
     time: formatKoreanTime(createdAt),
     isLocal: false,
@@ -742,6 +743,32 @@ export const useChatStore = defineStore('chat', {
           }
         }),
       }
+    },
+
+    updateActionDraft(actionDraft) {
+      const draftId = actionDraft?.draftId || actionDraft?.draft_id
+      if (!draftId) return
+
+      const updated = {}
+      Object.entries(this.messagesByConversationId).forEach(([key, messages]) => {
+        updated[key] = (messages || []).map((message) => {
+          const currentDraftId = message.actionDraft?.draftId || message.actionDraft?.draft_id
+          return String(currentDraftId || '') === String(draftId)
+            ? { ...message, actionDraft }
+            : message
+        })
+      })
+      this.messagesByConversationId = updated
+    },
+
+    async confirmActionDraft({ draftId, version, values }) {
+      const response = await chatApi.confirmActionDraft(
+        draftId,
+        version,
+        values,
+      )
+      this.updateActionDraft(response.data)
+      return response.data
     },
 
     removeLocalMessage(conversationId, localMessageId) {
