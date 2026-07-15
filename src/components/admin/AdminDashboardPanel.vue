@@ -78,6 +78,13 @@ const kpis = computed(() => [
   },
 ])
 
+const ragSummary = computed(() => dashboard.value?.ragSummary ?? {
+  totalSearches: 0,
+  resultFoundRate: 0,
+  avgTop1Similarity: 0,
+  p95LatencyMs: 0,
+})
+
 const logRows = computed(() => {
   return (dashboard.value?.recentAuthLogs ?? []).map((row) => ({
     createdAt: row.createdAt,
@@ -143,10 +150,12 @@ watch(totalLogPages, (nextTotalPages) => {
 })
 
 const tokenTrendCanvas = ref(null)
-const tokenUsageCanvas = ref(null)
+const domainTokenCanvas = ref(null)
 const requestCanvas = ref(null)
+const toolUsageCanvas = ref(null)
+const ragStatusCanvas = ref(null)
+const ragDocumentsCanvas = ref(null)
 const signupCanvas = ref(null)
-const mauCanvas = ref(null)
 
 const charts = []
 
@@ -212,6 +221,72 @@ const paddedBarChartOptions = {
   },
 }
 
+const horizontalBarChartOptions = {
+  ...baseChartOptions,
+  indexAxis: 'y',
+  layout: {
+    padding: {
+      left: 8,
+      right: 14,
+    },
+  },
+  scales: {
+    x: {
+      beginAtZero: true,
+      grid: {
+        color: 'rgba(227, 232, 242, 0.8)',
+      },
+      ticks: {
+        color: '#8a94ac',
+      },
+      border: {
+        display: false,
+      },
+    },
+    y: {
+      grid: {
+        display: false,
+      },
+      ticks: {
+        color: '#59647d',
+      },
+      border: {
+        display: false,
+      },
+    },
+  },
+}
+
+const stackedBarChartOptions = {
+  ...paddedBarChartOptions,
+  plugins: {
+    ...paddedBarChartOptions.plugins,
+    legend: {
+      display: true,
+      position: 'bottom',
+      labels: {
+        usePointStyle: true,
+        boxWidth: 8,
+        color: '#59647d',
+        font: {
+          family: 'Pretendard Variable',
+          size: 11,
+        },
+      },
+    },
+  },
+  scales: {
+    x: {
+      ...paddedBarChartOptions.scales.x,
+      stacked: true,
+    },
+    y: {
+      ...paddedBarChartOptions.scales.y,
+      stacked: true,
+    },
+  },
+}
+
 const createChart = (canvas, config) => {
   if (!canvas.value) return
 
@@ -224,18 +299,34 @@ const destroyCharts = () => {
   }
 }
 
+const withAlpha = (color, alpha) => {
+  const normalized = color.trim()
+  const hex = normalized.match(/^#([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i)
+
+  if (!hex) return normalized
+
+  const [, red, green, blue] = hex
+  return `rgba(${Number.parseInt(red, 16)}, ${Number.parseInt(green, 16)}, ${Number.parseInt(blue, 16)}, ${alpha})`
+}
+
 const renderCharts = () => {
   destroyCharts()
 
+  const primaryLight = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-primary-light')
+    .trim() || '#4988C4'
+  const sky = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-sky')
+    .trim() || '#12A5DE'
+  const cafeteriaColor = sky
+
   const tokenPoints = dashboard.value?.tokenUsageTrend ?? []
+  const domainTokenUsage = dashboard.value?.domainTokenUsage ?? []
   const toolUsage = dashboard.value?.toolUsage ?? []
   const requestTrend = dashboard.value?.requestTrend ?? []
   const authTrend = dashboard.value?.authTrend ?? []
-  const ragSummary = dashboard.value?.ragSummary ?? {
-    totalSearches: 0,
-    avgHitCount: 0,
-    avgLatencyMs: 0,
-  }
+  const ragStatusTrend = dashboard.value?.ragStatusTrend ?? []
+  const ragTopDocuments = dashboard.value?.ragTopDocuments ?? []
 
   createChart(tokenTrendCanvas, {
     type: 'line',
@@ -244,33 +335,31 @@ const renderCharts = () => {
       datasets: [
         {
           data: tokenPoints.map((point) => point.totalTokens),
-          borderColor: '#1b4396',
-          backgroundColor: 'rgba(27, 67, 150, 0.12)',
+          borderColor: primaryLight,
+          backgroundColor: withAlpha(primaryLight, 0.14),
           fill: true,
           tension: 0.38,
           pointRadius: 3,
-          pointBackgroundColor: '#1b4396',
+          pointBackgroundColor: primaryLight,
         },
       ],
     },
     options: baseChartOptions,
   })
 
-  createChart(tokenUsageCanvas, {
+  createChart(domainTokenCanvas, {
     type: 'bar',
     data: {
-      labels: toolUsage.map((item) => compactToolName(item.toolName)),
+      labels: domainTokenUsage.map((item) => domainLabel(item.domain)),
       datasets: [
         {
-          data: toolUsage.map((item) => item.count),
-          categoryPercentage: 0.7,
-          barPercentage: 0.78,
+          data: domainTokenUsage.map((item) => item.avgTokens),
           borderRadius: 6,
-          backgroundColor: ['#17306e', '#1b4396', '#12a5de', '#2fa35c', '#f6c21a', '#f0812c'],
+          backgroundColor: primaryLight,
         },
       ],
     },
-    options: paddedBarChartOptions,
+    options: horizontalBarChartOptions,
   })
 
   createChart(requestCanvas, {
@@ -286,6 +375,95 @@ const renderCharts = () => {
       ],
     },
     options: baseChartOptions,
+  })
+
+  createChart(toolUsageCanvas, {
+    type: 'bar',
+    data: {
+      labels: toolUsage.map((item) => compactToolName(item.toolName)),
+      datasets: [
+        {
+          data: toolUsage.map((item) => item.count),
+          categoryPercentage: 0.7,
+          barPercentage: 0.78,
+          borderRadius: 6,
+          backgroundColor: toolUsage.map((item, index) => {
+            if (item.toolName === 'cafeteria') return cafeteriaColor
+
+            const colors = ['#17306e', '#1b4396', '#12a5de', '#2fa35c', '#f6c21a', '#f0812c']
+            return colors[index % colors.length]
+          }),
+        },
+      ],
+    },
+    options: paddedBarChartOptions,
+  })
+
+  createChart(ragStatusCanvas, {
+    type: 'bar',
+    data: {
+      labels: ragStatusTrend.map((point) => point.label),
+      datasets: [
+        {
+          label: '검색 결과 확보',
+          data: ragStatusTrend.map((point) => point.resultFound),
+          backgroundColor: '#2fa35c',
+          borderRadius: 4,
+        },
+        {
+          label: '검색 결과 없음',
+          data: ragStatusTrend.map((point) => point.noResult),
+          backgroundColor: '#f6c21a',
+          borderRadius: 4,
+        },
+        {
+          label: '오류',
+          data: ragStatusTrend.map((point) => point.error),
+          backgroundColor: '#d94f4f',
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: stackedBarChartOptions,
+  })
+
+  createChart(ragDocumentsCanvas, {
+    type: 'bar',
+    data: {
+      labels: ragTopDocuments.map((item) => item.documentTitle || `문서 #${item.documentId}`),
+      datasets: [
+        {
+          data: ragTopDocuments.map((item) => item.exposureCount),
+          borderRadius: 6,
+          backgroundColor: '#1b4396',
+        },
+      ],
+    },
+    options: {
+      ...horizontalBarChartOptions,
+      plugins: {
+        ...horizontalBarChartOptions.plugins,
+        tooltip: {
+          ...horizontalBarChartOptions.plugins.tooltip,
+          callbacks: {
+            label: (context) => `노출 ${formatNumber(context.raw)}회`,
+          },
+        },
+      },
+      scales: {
+        ...horizontalBarChartOptions.scales,
+        y: {
+          ...horizontalBarChartOptions.scales.y,
+          ticks: {
+            ...horizontalBarChartOptions.scales.y.ticks,
+            callback(value) {
+              const label = this.getLabelForValue(value)
+              return label.length > 22 ? `${label.slice(0, 22)}…` : label
+            },
+          },
+        },
+      },
+    },
   })
 
   createChart(signupCanvas, {
@@ -306,26 +484,6 @@ const renderCharts = () => {
     options: baseChartOptions,
   })
 
-  createChart(mauCanvas, {
-    type: 'bar',
-    data: {
-      labels: ['검색 수', '평균 반환 문서 수', '평균 지연'],
-      datasets: [
-        {
-          data: [
-            ragSummary.totalSearches,
-            Math.round(ragSummary.avgHitCount * 10) / 10,
-            ragSummary.avgLatencyMs,
-          ],
-          categoryPercentage: 0.62,
-          barPercentage: 0.72,
-          borderRadius: 6,
-          backgroundColor: ['#1b4396', '#12a5de', '#f0812c'],
-        },
-      ],
-    },
-    options: paddedBarChartOptions,
-  })
 }
 
 const fetchDashboard = async () => {
@@ -396,7 +554,12 @@ const domainLabel = (domain) => {
     parking: '주차',
     cafeteria: '구내식당',
     office_supplies: '비품',
+    supply: '비품',
     policy_rag: '사내 규정',
+    childcare: '보육',
+    agent_internal: 'AI 내부 동작',
+    general: '기타',
+    smalltalk: '기타',
     rag: 'RAG',
     unknown: '기타',
   }
@@ -427,6 +590,7 @@ onBeforeUnmount(() => {
         <div>
           <p>Admin</p>
           <h1 id="admin-dashboard-title">관리자 대시보드</h1>
+          <small class="kpi-period-note">상단 카드는 이번 달 기준이며 지난달 대비 변화량을 표시합니다.</small>
         </div>
 
         <button
@@ -479,15 +643,15 @@ onBeforeUnmount(() => {
         </div>
       </article>
 
-      <article class="dashboard-card token-total-card">
+      <article class="dashboard-card domain-token-card">
         <div class="card-header">
           <div>
-            <span>Tool Call by Domain</span>
-            <h2>도메인별 툴 호출 횟수</h2>
+            <span>Average Tokens by Domain</span>
+            <h2>도메인별 요청당 평균 토큰</h2>
           </div>
         </div>
         <div class="chart-area">
-          <canvas ref="tokenUsageCanvas" aria-label="도메인별 툴 호출 횟수 차트"></canvas>
+          <canvas ref="domainTokenCanvas" aria-label="도메인별 요청당 평균 토큰 차트"></canvas>
         </div>
       </article>
 
@@ -503,11 +667,77 @@ onBeforeUnmount(() => {
         </div>
       </article>
 
+      <article class="dashboard-card tool-usage-card">
+        <div class="card-header">
+          <div>
+            <span>Tool Call by Domain</span>
+            <h2>도메인별 툴 호출 횟수</h2>
+          </div>
+        </div>
+        <div class="chart-area">
+          <canvas ref="toolUsageCanvas" aria-label="도메인별 툴 호출 횟수 차트"></canvas>
+        </div>
+      </article>
+
+      <article class="dashboard-card rag-status-card">
+        <div class="card-header">
+          <div>
+            <span>RAG Search Status</span>
+            <h2>RAG 검색 현황</h2>
+          </div>
+        </div>
+        <dl class="rag-summary-grid">
+          <div>
+            <dt>전체 검색 수</dt>
+            <dd>{{ formatNumber(ragSummary.totalSearches) }}</dd>
+          </div>
+          <div>
+            <dt>검색 결과 확보율</dt>
+            <dd>{{ formatPercent(ragSummary.resultFoundRate) }}%</dd>
+          </div>
+          <div>
+            <dt>평균 Top 1 유사도</dt>
+            <dd>{{ Number(ragSummary.avgTop1Similarity ?? 0).toFixed(3) }}</dd>
+          </div>
+          <div>
+            <dt>P95 검색 지연</dt>
+            <dd>{{ formatNumber(ragSummary.p95LatencyMs) }} ms</dd>
+          </div>
+        </dl>
+        <div class="chart-area rag-chart-area">
+          <canvas ref="ragStatusCanvas" aria-label="RAG 검색 상태 추이 차트"></canvas>
+        </div>
+      </article>
+
+      <article class="dashboard-card rag-documents-card">
+        <div class="card-header">
+          <div>
+            <span>Top Exposed Documents</span>
+            <h2>검색 결과 노출 문서 TOP 5</h2>
+          </div>
+        </div>
+        <div class="chart-area">
+          <canvas ref="ragDocumentsCanvas" aria-label="검색 결과 노출 문서 TOP 5 차트"></canvas>
+        </div>
+      </article>
+
+      <article class="dashboard-card signup-card">
+        <div class="card-header">
+          <div>
+            <span>Login</span>
+            <h2>로그인 사용자 추이</h2>
+          </div>
+        </div>
+        <div class="chart-area">
+          <canvas ref="signupCanvas" aria-label="로그인 사용자 추이 그래프"></canvas>
+        </div>
+      </article>
+
       <article class="dashboard-card log-card">
         <div class="card-header">
           <div>
-            <span>Auth Logs</span>
-            <h2>로그인, 회원가입 로그</h2>
+            <span>Recent Auth Activity</span>
+            <h2>최근 인증 활동</h2>
           </div>
           <button type="button" @click="openAuthLogDialog">확장</button>
         </div>
@@ -538,30 +768,6 @@ onBeforeUnmount(() => {
           </table>
         </div>
       </article>
-
-      <article class="dashboard-card signup-card">
-        <div class="card-header">
-          <div>
-            <span>Login</span>
-            <h2>로그인 사용자 추이</h2>
-          </div>
-        </div>
-        <div class="chart-area">
-          <canvas ref="signupCanvas" aria-label="로그인 사용자 추이 그래프"></canvas>
-        </div>
-      </article>
-
-      <article class="dashboard-card mau-card">
-        <div class="card-header">
-          <div>
-            <span>RAG</span>
-            <h2>RAG 검색 결과 요약</h2>
-          </div>
-        </div>
-        <div class="chart-area">
-          <canvas ref="mauCanvas" aria-label="RAG 검색 결과 요약 그래프"></canvas>
-        </div>
-      </article>
     </div>
 
     <div
@@ -579,7 +785,7 @@ onBeforeUnmount(() => {
         <header class="auth-log-modal-header">
           <div>
             <span>Auth Logs</span>
-            <h2 id="auth-log-modal-title">로그인, 회원가입 로그</h2>
+            <h2 id="auth-log-modal-title">최근 인증 활동</h2>
           </div>
 
           <button
@@ -856,7 +1062,7 @@ onBeforeUnmount(() => {
   grid-column: 1 / 7;
 }
 
-.token-total-card {
+.domain-token-card {
   grid-column: 7 / 13;
 }
 
@@ -864,15 +1070,25 @@ onBeforeUnmount(() => {
   grid-column: 1 / 7;
 }
 
-.log-card {
+.tool-usage-card {
   grid-column: 7 / 13;
+}
+
+.rag-status-card {
+  grid-column: 1 / 7;
+  min-height: 300px;
+}
+
+.rag-documents-card {
+  grid-column: 7 / 13;
+  min-height: 300px;
 }
 
 .signup-card {
   grid-column: 1 / 7;
 }
 
-.mau-card {
+.log-card {
   grid-column: 7 / 13;
 }
 
@@ -916,6 +1132,46 @@ onBeforeUnmount(() => {
 .chart-area canvas {
   width: 100%;
   height: 100%;
+}
+
+.rag-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 12px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.rag-summary-grid div {
+  min-width: 0;
+  padding: 10px 9px;
+  border-right: 1px solid var(--color-border-light);
+  background: var(--color-surface-soft);
+}
+
+.rag-summary-grid div:last-child {
+  border-right: 0;
+}
+
+.rag-summary-grid dt {
+  color: var(--color-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.rag-summary-grid dd {
+  margin: 5px 0 0;
+  color: var(--color-primary);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.rag-chart-area {
+  min-height: 132px;
 }
 
 .log-table-wrap {
@@ -1126,11 +1382,13 @@ onBeforeUnmount(() => {
   .admin-kpi-card,
   .range-toggle,
   .token-trend-card,
-  .token-total-card,
+  .domain-token-card,
   .request-card,
-  .log-card,
+  .tool-usage-card,
+  .rag-status-card,
+  .rag-documents-card,
   .signup-card,
-  .mau-card {
+  .log-card {
     grid-column: 1 / -1;
   }
 
@@ -1195,6 +1453,18 @@ onBeforeUnmount(() => {
   .dashboard-card {
     min-height: 230px;
     padding: 15px;
+  }
+
+  .rag-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rag-summary-grid div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .rag-summary-grid div:nth-child(n + 3) {
+    border-top: 1px solid var(--color-border-light);
   }
 
   .auth-log-modal-backdrop {
