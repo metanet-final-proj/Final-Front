@@ -1,5 +1,6 @@
 import apiClient from './client'
 import { useAuthStore } from '../stores/authStore'
+import { tokenStore } from '../stores/tokenStore.js'
 
 const DEBUG_CHAT_SSE =
   import.meta.env.DEV || localStorage.getItem('debugChatSse') === '1'
@@ -13,8 +14,8 @@ const getApiBaseUrl = () => {
 }
 
 const getAuthHeaders = () => {
-  const accessToken = localStorage.getItem('accessToken')
-  const tokenType = localStorage.getItem('tokenType') || 'Bearer'
+  const accessToken = tokenStore.getAccessToken()
+  const tokenType = tokenStore.getTokenType()
 
   if (!accessToken) {
     return {}
