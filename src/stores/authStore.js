@@ -1,17 +1,27 @@
 import { defineStore } from 'pinia'
-import { authApi } from '../api/authApi'
-import { employeeApi } from '../api/employeeApi'
+import { authApi } from '../api/authApi.js'
+import { employeeApi } from '../api/employeeApi.js'
+import { tokenStore } from './tokenStore.js'
 
-const ACCESS_TOKEN_KEY = 'accessToken'
-const REFRESH_TOKEN_KEY = 'refreshToken'
-const TOKEN_TYPE_KEY = 'tokenType'
+const LEGACY_TOKEN_KEYS = ['accessToken', 'refreshToken', 'tokenType']
 const TOKEN_REFRESH_THRESHOLD_MS = 60 * 1000
 
 let refreshPromise = null
 
-const normalizeToken = (token) => {
-  if (!token) return ''
-  return String(token).replace(/^"|"$/g, '').trim()
+const clearLegacyStoredTokens = () => {
+  LEGACY_TOKEN_KEYS.forEach((key) => localStorage.removeItem(key))
+}
+
+const normalizePermission = (permission) => {
+  return String(permission || '').trim().toLowerCase()
+}
+
+const normalizePermissions = (permissions) => {
+  const permissionList = Array.isArray(permissions) ? permissions : [permissions]
+
+  return permissionList
+    .map(normalizePermission)
+    .filter(Boolean)
 }
 
 const decodeJwtPayload = (token) => {
@@ -41,17 +51,28 @@ const getTokenExpiresAtMs = (token) => {
 }
 
 export const useAuthStore = defineStore('auth', {
-  state: () => ({
-    accessToken: normalizeToken(localStorage.getItem(ACCESS_TOKEN_KEY)),
-    refreshToken: normalizeToken(localStorage.getItem(REFRESH_TOKEN_KEY)),
-    tokenType: localStorage.getItem(TOKEN_TYPE_KEY) || 'Bearer',
-    user: null,
-    employeeProfile: null,
-    loading: false,
-  }),
+  state: () => {
+    clearLegacyStoredTokens()
+
+    return {
+      user: null,
+      employeeProfile: null,
+      loading: false,
+    }
+  },
 
   getters: {
-    isAuthenticated: (state) => Boolean(state.accessToken),
+    accessToken: () => tokenStore.getAccessToken(),
+
+    tokenType: () => tokenStore.getTokenType(),
+
+    isAuthenticated: () => Boolean(tokenStore.getAccessToken()),
+
+    userPermissions: (state) => normalizePermissions(state.user?.permissions),
+
+    hasPermission() {
+      return (permission) => this.userPermissions.includes(normalizePermission(permission))
+    },
 
     displayName: (state) => {
       return state.user?.displayName || '사용자'
@@ -76,31 +97,17 @@ export const useAuthStore = defineStore('auth', {
 
   actions: {
     setTokens(tokenResponse) {
-      this.tokenType = tokenResponse.tokenType || 'Bearer'
-      this.accessToken = normalizeToken(tokenResponse.accessToken)
-      this.refreshToken = normalizeToken(tokenResponse.refreshToken)
-
-      localStorage.setItem(TOKEN_TYPE_KEY, this.tokenType)
-      localStorage.setItem(ACCESS_TOKEN_KEY, this.accessToken)
-
-      if (this.refreshToken) {
-        localStorage.setItem(REFRESH_TOKEN_KEY, this.refreshToken)
-      } else {
-        localStorage.removeItem(REFRESH_TOKEN_KEY)
-      }
+      tokenStore.setTokens(tokenResponse)
+      clearLegacyStoredTokens()
     },
 
     clearAuth() {
-      this.accessToken = ''
-      this.refreshToken = ''
-      this.tokenType = 'Bearer'
+      tokenStore.clear()
       this.user = null
       this.employeeProfile = null
       this.loading = false
 
-      localStorage.removeItem(ACCESS_TOKEN_KEY)
-      localStorage.removeItem(REFRESH_TOKEN_KEY)
-      localStorage.removeItem(TOKEN_TYPE_KEY)
+      clearLegacyStoredTokens()
     },
 
     async exchangeCode(code) {
@@ -179,14 +186,7 @@ export const useAuthStore = defineStore('auth', {
         return refreshPromise
       }
 
-      const refreshToken = this.refreshToken
-
-      if (!refreshToken) {
-        this.clearAuth()
-        throw new Error('Refresh token is missing')
-      }
-
-      refreshPromise = authApi.refresh(refreshToken)
+      refreshPromise = authApi.refresh()
         .then((response) => {
           this.setTokens(response.data)
           return response.data
@@ -217,12 +217,8 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async logout() {
-      const refreshToken = this.refreshToken
-
       try {
-        if (refreshToken) {
-          await authApi.logout(refreshToken)
-        }
+        await authApi.logout()
       } catch (error) {
         console.error('Logout API failed:', error)
       } finally {

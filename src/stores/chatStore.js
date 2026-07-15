@@ -1,5 +1,12 @@
 import { defineStore } from 'pinia'
 import { chatApi } from '../api/chatApi'
+import {
+  hasTrackedAssistantMessage,
+  mergeFetchedMessagesWithInFlight,
+} from './chatMessageMerge.js'
+
+const DEBUG_CHAT_SSE =
+  import.meta.env.DEV || localStorage.getItem('debugChatSse') === '1'
 
 const nowTime = () => {
   const date = new Date()
@@ -16,12 +23,17 @@ const ASSISTANT_FAILURE_TEXT = '답변 생성에 실패했습니다. 잠시 후 
 
 const STAGE_LABELS = {
   planning: '요청을 분석하고 있어요...',
+  summarizing: '지금까지의 대화를 요약하고 있어요...',
   generating: '답변을 작성하고 있어요...',
 }
 
 const getStatusText = (parsed) => {
   if (parsed.event === 'status') {
     return parsed.data?.message || STAGE_LABELS[parsed.data?.stage] || null
+  }
+
+  if (parsed.event === 'summary') {
+    return parsed.data?.message || '이전 대화 요약을 완료했어요.'
   }
 
   if (parsed.event === 'progress') {
@@ -38,8 +50,11 @@ const getStatusText = (parsed) => {
 
 const AGENT_STAGE_TITLES = {
   planning: '요청을 분석하고 계획을 세우는 중',
+  summarizing: '답변을 요약하는 중',
   generating: '답변 생성을 준비하는 중',
 }
+
+const RUNNING_STATUS_STAGES = new Set(['summarizing', 'generating'])
 
 const createAgentActivity = (currentText = ASSISTANT_LOADING_TEXT) => ({
   currentText,
@@ -100,7 +115,7 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
       id: `status-${stage}`,
       type: 'status',
       title: data.message || AGENT_STAGE_TITLES[stage] || statusText,
-      status: stage === 'generating' ? 'running' : 'done',
+      status: RUNNING_STATUS_STAGES.has(stage) ? 'running' : 'done',
     }
     const completedSteps = (baseActivity.steps || []).map((step) =>
       step.status === 'running'
@@ -119,6 +134,32 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
         steps: completedSteps,
       },
       nextStep,
+    )
+  }
+
+  if (parsed.event === 'summary') {
+    const completedSteps = (baseActivity.steps || []).map((step) =>
+      step.status === 'running'
+        ? {
+            ...step,
+            status: 'done',
+          }
+        : step,
+    )
+
+    return updateAgentStep(
+      {
+        ...baseActivity,
+        currentText: statusText,
+        collapsed: false,
+        steps: completedSteps,
+      },
+      {
+        id: 'status-summarizing',
+        type: 'summary',
+        title: statusText,
+        status: 'done',
+      },
     )
   }
 
@@ -310,12 +351,12 @@ export const useChatStore = defineStore('chat', {
     conversations: [],
     activeConversationId: null,
     messagesByConversationId: {},
+    inFlightByConversationId: {},
     loading: false,
     messagesLoading: false,
     creating: false,
     updating: false,
     deleting: false,
-    sending: false,
   }),
 
   getters: {
@@ -324,6 +365,7 @@ export const useChatStore = defineStore('chat', {
         const conversationId = conversation.conversationId
         const key = String(conversationId)
         const messages = state.messagesByConversationId[key]
+        const inFlight = state.inFlightByConversationId[key]
 
         return {
           id: conversationId,
@@ -333,6 +375,7 @@ export const useChatStore = defineStore('chat', {
           createdAt: conversation.createdAt,
           updatedAt: conversation.updatedAt,
           lastMessageAt: conversation.lastMessageAt,
+          isAnswering: inFlight?.status === 'streaming',
           messages:
             messages && messages.length > 0
               ? messages
@@ -356,11 +399,80 @@ export const useChatStore = defineStore('chat', {
         }
       )
     },
+
+    isConversationAnswering: (state) => (conversationId) => {
+      if (!conversationId) return false
+
+      return state.inFlightByConversationId[String(conversationId)]?.status === 'streaming'
+    },
   },
 
   actions: {
     setActiveConversation(conversationId) {
       this.activeConversationId = conversationId
+    },
+
+    startConversationInFlight(conversationId, assistantMessageId) {
+      if (!conversationId || !assistantMessageId) return
+
+      const key = String(conversationId)
+
+      this.inFlightByConversationId = {
+        ...this.inFlightByConversationId,
+        [key]: {
+          conversationId,
+          assistantMessageId,
+          status: 'streaming',
+          startedAt: new Date().toISOString(),
+        },
+      }
+    },
+
+    updateInFlightAssistantMessageId(conversationId, assistantMessageId) {
+      if (!conversationId || !assistantMessageId) return
+
+      const key = String(conversationId)
+      const current = this.inFlightByConversationId[key]
+
+      if (!current) return
+
+      this.inFlightByConversationId = {
+        ...this.inFlightByConversationId,
+        [key]: {
+          ...current,
+          assistantMessageId,
+        },
+      }
+    },
+
+    completeConversationInFlight(conversationId) {
+      if (!conversationId) return
+
+      const key = String(conversationId)
+      const current = this.inFlightByConversationId[key]
+
+      if (!current) return
+
+      this.inFlightByConversationId = {
+        ...this.inFlightByConversationId,
+        [key]: {
+          ...current,
+          status: 'completed',
+          completedAt: new Date().toISOString(),
+        },
+      }
+    },
+
+    finishConversationInFlight(conversationId) {
+      if (!conversationId) return
+
+      const key = String(conversationId)
+
+      if (!this.inFlightByConversationId[key]) return
+
+      const nextInFlight = { ...this.inFlightByConversationId }
+      delete nextInFlight[key]
+      this.inFlightByConversationId = nextInFlight
     },
 
     async fetchConversations() {
@@ -492,26 +604,46 @@ export const useChatStore = defineStore('chat', {
     async fetchMessages(conversationId) {
       if (!conversationId) return []
 
+      const key = String(conversationId)
       this.messagesLoading = true
 
       try {
         const response = await chatApi.listMessages(conversationId)
-        const messages = extractMessages(response.data)
+        const serverMessages = extractMessages(response.data)
+        const inFlight = this.inFlightByConversationId[key]
+        const messages = mergeFetchedMessagesWithInFlight(
+          serverMessages,
+          this.messagesByConversationId[key],
+          inFlight,
+        )
 
         this.messagesByConversationId = {
           ...this.messagesByConversationId,
-          [String(conversationId)]: messages,
+          [key]: messages,
+        }
+
+        if (
+          inFlight?.status === 'completed' &&
+          hasTrackedAssistantMessage(serverMessages, inFlight)
+        ) {
+          this.finishConversationInFlight(conversationId)
         }
 
         return messages
       } catch (error) {
         if (error.response?.status === 404) {
+          const messages = mergeFetchedMessagesWithInFlight(
+            [],
+            this.messagesByConversationId[key],
+            this.inFlightByConversationId[key],
+          )
+
           this.messagesByConversationId = {
             ...this.messagesByConversationId,
-            [String(conversationId)]: [],
+            [key]: messages,
           }
 
-          return []
+          return messages
         }
 
         throw error
@@ -549,6 +681,8 @@ export const useChatStore = defineStore('chat', {
       const currentMessages = this.messagesByConversationId[key] || []
       const normalized = normalizeMessage(serverMessage)
 
+      let replacement = null
+
       this.messagesByConversationId = {
         ...this.messagesByConversationId,
         [key]: currentMessages.map((message) => {
@@ -556,12 +690,16 @@ export const useChatStore = defineStore('chat', {
             return message
           }
 
-          return {
+          replacement = {
             ...normalized,
             agentActivity: normalized.agentActivity || message.agentActivity || null,
           }
+
+          return replacement
         }),
       }
+
+      return replacement
     },
 
     updateLocalMessageText(conversationId, localMessageId, updater) {
@@ -617,7 +755,13 @@ export const useChatStore = defineStore('chat', {
     },
 
     async sendMessage(conversationId, message) {
-      if (!conversationId || !message.trim()) return []
+      if (
+        !conversationId ||
+        !message.trim() ||
+        this.isConversationAnswering(conversationId)
+      ) {
+        return []
+      }
 
       const trimmedMessage = message.trim()
       const localUserMessageId = `local-user-${Date.now()}`
@@ -656,8 +800,8 @@ export const useChatStore = defineStore('chat', {
 
       this.appendLocalMessage(conversationId, localUserMessage)
       this.appendLocalMessage(conversationId, localAssistantMessage)
-
-      this.sending = true
+      const idempotencyKey = `idem_${crypto.randomUUID()}`
+      this.startConversationInFlight(conversationId, localAssistantMessageId)
 
       try {
         await chatApi.sendMessageStream(conversationId, trimmedMessage, {
@@ -671,6 +815,16 @@ export const useChatStore = defineStore('chat', {
             if (!chunk) return
           
             if (!hasReceivedFirstChunk) {
+              if (DEBUG_CHAT_SSE) {
+                console.log('[chat:store:first-chunk]', {
+                  conversationId,
+                  localAssistantMessageId,
+                  data,
+                  chunk,
+                  agentActivity,
+                })
+              }
+
               hasReceivedFirstChunk = true
               agentActivity = completeAgentActivity(agentActivity)
           
@@ -692,9 +846,18 @@ export const useChatStore = defineStore('chat', {
           },
 
           onAssistantMessage: (data) => {
+            if (DEBUG_CHAT_SSE) {
+              console.log('[chat:store:assistant-message]', {
+                conversationId,
+                localAssistantMessageId,
+                data,
+                agentActivity,
+              })
+            }
+
             hasReceivedAssistantMessage = true
             agentActivity = completeAgentActivity(agentActivity)
-            this.replaceLocalMessage(
+            const assistantMessage = this.replaceLocalMessage(
               conversationId,
               localAssistantMessageId,
               {
@@ -702,6 +865,13 @@ export const useChatStore = defineStore('chat', {
                 agentActivity,
               },
             )
+
+            if (assistantMessage?.id) {
+              this.updateInFlightAssistantMessageId(
+                conversationId,
+                assistantMessage.id,
+              )
+            }
           },
 
           onError: (data) => {
@@ -709,23 +879,58 @@ export const useChatStore = defineStore('chat', {
           },
 
           onEvent: (parsed) => {
+            if (DEBUG_CHAT_SSE) {
+              console.log('[chat:store:event:received]', {
+                event: parsed.event,
+                data: parsed.data,
+                rawData: parsed.rawData,
+                hasReceivedFirstChunk,
+                currentSteps: agentActivity?.steps || [],
+              })
+            }
+
             extractRefreshTargets(parsed.data).forEach((target) => {
               refreshTargets.add(target)
             })
 
-            if (hasReceivedFirstChunk) return
-
             const statusText = getStatusText(parsed)
-            if (!statusText) return
+            if (!statusText) {
+              if (DEBUG_CHAT_SSE) {
+                console.log('[chat:store:event:no-status-text]', {
+                  event: parsed.event,
+                  data: parsed.data,
+                })
+              }
+              return
+            }
+
             agentActivity = updateAgentActivityFromEvent(agentActivity, parsed)
 
-            this.patchLocalMessage(conversationId, localAssistantMessageId, {
-              text: statusText,
-              content: statusText,
-              agentActivity,
-            })
+            if (DEBUG_CHAT_SSE) {
+              console.log('[chat:store:event:activity-updated]', {
+                event: parsed.event,
+                statusText,
+                hasReceivedFirstChunk,
+                steps: agentActivity?.steps || [],
+                agentActivity,
+              })
+            }
+
+            const activityPatch = hasReceivedFirstChunk
+              ? { agentActivity }
+              : {
+                  text: statusText,
+                  content: statusText,
+                  agentActivity,
+                }
+
+            this.patchLocalMessage(
+              conversationId,
+              localAssistantMessageId,
+              activityPatch,
+            )
           },      
-        })
+        }, { idempotencyKey })
 
         if (!hasReceivedFirstChunk && !hasReceivedAssistantMessage) {
           this.patchLocalMessage(conversationId, localAssistantMessageId, {
@@ -754,9 +959,15 @@ export const useChatStore = defineStore('chat', {
           agentActivity: completeAgentActivity(agentActivity),
         })
 
+        this.finishConversationInFlight(conversationId)
+
         throw error
       } finally {
-        this.sending = false
+        if (hasReceivedAssistantMessage) {
+          this.completeConversationInFlight(conversationId)
+        } else {
+          this.finishConversationInFlight(conversationId)
+        }
       }
     },
   },

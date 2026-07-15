@@ -10,13 +10,8 @@ const authStore = useAuthStore()
 
 const loginFormKey = ref(0)
 
-const hasAccessToken = () => {
-  const token = localStorage.getItem('accessToken')
-  return Boolean(token && token.replace(/^"|"$/g, '').trim())
-}
-
 const goToChatIfAuthenticated = () => {
-  if (authStore.isAuthenticated || hasAccessToken()) {
+  if (authStore.isAuthenticated) {
     router.replace('/chat')
     return true
   }

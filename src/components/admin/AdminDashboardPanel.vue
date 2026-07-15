@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Chart from 'chart.js/auto'
 import { adminObservabilityApi } from '../../api/adminObservabilityApi'
+import OrganizationManagementModal from './OrganizationManagementModal.vue'
 
 const ranges = [
   { label: '24H', value: '24h' },
@@ -13,6 +14,18 @@ const selectedRange = ref(ranges[0].value)
 const dashboard = ref(null)
 const isLoading = ref(false)
 const errorMessage = ref('')
+const organizationDialogOpen = ref(false)
+const organizationButtonRef = ref(null)
+
+const openOrganizationDialog = () => {
+  organizationDialogOpen.value = true
+}
+
+const closeOrganizationDialog = async () => {
+  organizationDialogOpen.value = false
+  await nextTick()
+  organizationButtonRef.value?.focus()
+}
 
 const summary = computed(() => dashboard.value?.summary ?? {
   totalRequests: 0,
@@ -411,9 +424,19 @@ onBeforeUnmount(() => {
   <section class="admin-dashboard-panel" aria-labelledby="admin-dashboard-title">
     <div class="admin-dashboard-grid">
       <header class="admin-heading">
-        <p>Admin</p>
-        <h1 id="admin-dashboard-title">관리자 대시보드</h1>
-        <small class="kpi-period-note">상단 카드는 이번달 기준이며 지난달 대비 변화량을 표시합니다.</small>
+        <div>
+          <p>Admin</p>
+          <h1 id="admin-dashboard-title">관리자 대시보드</h1>
+        </div>
+
+        <button
+          ref="organizationButtonRef"
+          class="organization-management-button"
+          type="button"
+          @click="openOrganizationDialog"
+        >
+          조직관리
+        </button>
       </header>
 
       <section class="admin-kpi-card" aria-label="관리자 KPI">
@@ -486,7 +509,7 @@ onBeforeUnmount(() => {
             <span>Auth Logs</span>
             <h2>로그인, 회원가입 로그</h2>
           </div>
-          <button type="button" @click="openAuthLogDialog">펼치기</button>
+          <button type="button" @click="openAuthLogDialog">확장</button>
         </div>
 
         <div class="log-table-wrap">
@@ -619,6 +642,11 @@ onBeforeUnmount(() => {
         </footer>
       </section>
     </div>
+
+    <OrganizationManagementModal
+      v-if="organizationDialogOpen"
+      @close="closeOrganizationDialog"
+    />
   </section>
 </template>
 
@@ -646,6 +674,10 @@ onBeforeUnmount(() => {
 .admin-heading {
   grid-column: 1 / -1;
   align-self: end;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .admin-heading p {
@@ -662,6 +694,28 @@ onBeforeUnmount(() => {
   font-size: 28px;
   font-weight: 850;
   line-height: 1.25;
+}
+
+.organization-management-button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--color-primary-light);
+  border-radius: 999px;
+  background: var(--color-primary-light);
+  color: var(--color-white);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.organization-management-button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+.organization-management-button:focus-visible {
+  outline: 3px solid rgba(var(--color-primary-light-rgb), 0.3);
+  outline-offset: 2px;
 }
 
 .kpi-period-note {

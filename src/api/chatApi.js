@@ -1,5 +1,9 @@
 import apiClient from './client'
 import { useAuthStore } from '../stores/authStore'
+import { tokenStore } from '../stores/tokenStore.js'
+
+const DEBUG_CHAT_SSE =
+  import.meta.env.DEV || localStorage.getItem('debugChatSse') === '1'
 
 const getApiBaseUrl = () => {
   if (import.meta.env.DEV) {
@@ -10,8 +14,8 @@ const getApiBaseUrl = () => {
 }
 
 const getAuthHeaders = () => {
-  const accessToken = localStorage.getItem('accessToken')
-  const tokenType = localStorage.getItem('tokenType') || 'Bearer'
+  const accessToken = tokenStore.getAccessToken()
+  const tokenType = tokenStore.getTokenType()
 
   if (!accessToken) {
     return {}
@@ -51,6 +55,8 @@ const parseSseEventBlock = (block) => {
   return {
     event: eventName,
     data,
+    rawData,
+    rawBlock: block,
   }
 }
 
@@ -95,6 +101,16 @@ const consumeSseStream = async (response, handlers = {}) => {
 
       const parsed = parseSseEventBlock(trimmedBlock)
 
+      if (DEBUG_CHAT_SSE) {
+        console.log('[chat:sse:parsed]', {
+          event: parsed.event,
+          data: parsed.data,
+          rawData: parsed.rawData,
+          rawBlock: parsed.rawBlock,
+          dataType: typeof parsed.data,
+        })
+      }
+
       if (parsed.event === 'user_message') {
         handlers.onUserMessage?.(parsed.data)
         continue
@@ -123,6 +139,16 @@ const consumeSseStream = async (response, handlers = {}) => {
 
   if (remaining) {
     const parsed = parseSseEventBlock(remaining)
+
+    if (DEBUG_CHAT_SSE) {
+      console.log('[chat:sse:parsed:remaining]', {
+        event: parsed.event,
+        data: parsed.data,
+        rawData: parsed.rawData,
+        rawBlock: parsed.rawBlock,
+        dataType: typeof parsed.data,
+      })
+    }
 
     if (parsed.event === 'user_message') {
       handlers.onUserMessage?.(parsed.data)
@@ -165,9 +191,10 @@ export const chatApi = {
     return apiClient.get(`/api/v1/chat/conversations/${conversationId}/messages`)
   },
 
-  async sendMessageStream(conversationId, message, handlers = {}) {
+  async sendMessageStream(conversationId, message, handlers = {}, requestOptions = {}) {
     const baseUrl = getApiBaseUrl()
     const authStore = useAuthStore()
+    const idempotencyKey = requestOptions.idempotencyKey || `idem_${crypto.randomUUID()}`
 
     await authStore.ensureFreshAccessToken()
 
@@ -178,6 +205,7 @@ export const chatApi = {
         headers: {
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
+          'Idempotency-Key': idempotencyKey,
           ...getAuthHeaders(),
         },
         body: JSON.stringify({
@@ -190,6 +218,14 @@ export const chatApi = {
 
     if (response.status === 401) {
       await authStore.refreshAccessToken()
+      response = await sendRequest()
+    }
+
+    let processingRetries = 0
+    while (response.status === 202 && processingRetries < 3) {
+      const retryAfterSeconds = Number(response.headers.get('Retry-After')) || 2
+      await new Promise((resolve) => setTimeout(resolve, retryAfterSeconds * 1000))
+      processingRetries += 1
       response = await sendRequest()
     }
 
