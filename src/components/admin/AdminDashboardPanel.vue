@@ -471,7 +471,7 @@ onBeforeUnmount(() => {
         <div class="card-header">
           <div>
             <span>Token Usage</span>
-            <h2>토큰 사용량 그래프</h2>
+            <h2>토큰 사용량</h2>
           </div>
         </div>
         <div class="chart-area">
@@ -495,7 +495,7 @@ onBeforeUnmount(() => {
         <div class="card-header">
           <div>
             <span>Total Request</span>
-            <h2>전체 요청량 그래프</h2>
+            <h2>전체 요청량</h2>
           </div>
         </div>
         <div class="chart-area">
@@ -542,12 +542,12 @@ onBeforeUnmount(() => {
       <article class="dashboard-card signup-card">
         <div class="card-header">
           <div>
-            <span>MAU</span>
-            <h2>MAU 변화량</h2>
+            <span>Login</span>
+            <h2>로그인 사용자 추이</h2>
           </div>
         </div>
         <div class="chart-area">
-          <canvas ref="signupCanvas" aria-label="MAU 변화량 그래프"></canvas>
+          <canvas ref="signupCanvas" aria-label="로그인 사용자 추이 그래프"></canvas>
         </div>
       </article>
 
