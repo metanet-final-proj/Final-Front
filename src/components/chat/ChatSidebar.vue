@@ -17,6 +17,10 @@ defineProps({
     type: Boolean,
     default: false,
   },
+  isDarkMode: {
+    type: Boolean,
+    default: false,
+  },
   logoutLoading: {
     type: Boolean,
     default: false,
@@ -32,6 +36,7 @@ const emit = defineEmits([
   'refresh-workhub',
   'room-deleted',
   'select-room',
+  'toggle-theme',
   'toggle-panel',
 ])
 
@@ -530,7 +535,38 @@ onBeforeUnmount(() => {
 
       <div v-if="profileMenuOpen" class="profile-menu">
         <div class="profile-menu-user">
-          <strong>{{ profileHeaderText }}</strong>
+          <div class="profile-menu-title-row">
+            <strong>{{ profileHeaderText }}</strong>
+            <button
+              class="profile-theme-toggle"
+              :class="{ dark: isDarkMode }"
+              type="button"
+              :aria-pressed="isDarkMode"
+              :aria-label="isDarkMode ? '라이트 모드로 변경' : '다크 모드로 변경'"
+              @click.stop="emit('toggle-theme')"
+            >
+              <span class="profile-theme-knob" aria-hidden="true">
+                <svg v-if="isDarkMode" width="13" height="13" viewBox="0 0 30 30" fill="none">
+                  <path
+                    d="M18.8 22.8C12.8 22.8 8 18 8 12c0-2.1.6-4 1.6-5.7A9.9 9.9 0 1 0 23.7 20.4c-1.5 1.5-3.5 2.4-4.9 2.4Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  />
+                  <path d="M21.8 5.8l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7.7-1.7Z" fill="currentColor" />
+                </svg>
+                <svg v-else width="14" height="14" viewBox="0 0 32 32" fill="none">
+                  <circle cx="16" cy="16" r="6.5" stroke="currentColor" stroke-width="2" />
+                  <path
+                    d="M16 3.5v4M16 24.5v4M3.5 16h4M24.5 16h4M7.2 7.2l2.8 2.8M22 22l2.8 2.8M24.8 7.2 22 10M10 22l-2.8 2.8"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+            </button>
+          </div>
 
           <dl class="profile-detail-list">
             <div>
@@ -665,9 +701,62 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
-.profile-menu-user > strong {
+.profile-menu-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.profile-menu-title-row > strong {
+  min-width: 0;
   font-size: 14px;
   color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-theme-toggle {
+  width: 46px;
+  height: 24px;
+  flex: 0 0 46px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-disabled);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.profile-theme-toggle.dark {
+  border-color: var(--color-markdown-pre-bg);
+  background: var(--color-markdown-pre-bg);
+  color: var(--color-white);
+}
+
+.profile-theme-knob {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-toggle-knob);
+  color: var(--color-text);
+  box-shadow: 0 3px 8px rgba(var(--color-primary-rgb), 0.12);
+  transform: translateX(0);
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+
+.profile-theme-toggle.dark .profile-theme-knob {
+  color: var(--color-markdown-pre-bg);
+  transform: translateX(22px);
 }
 
 .profile-detail-list {
@@ -749,8 +838,10 @@ onBeforeUnmount(() => {
 .sidebar {
   width: 312px;
   flex-shrink: 0;
-  height: calc(100% + 68px + var(--chat-body-bottom-padding));
-  margin-top: -68px;
+  height: auto;
+  min-height: 0;
+  margin-top: 0;
+  align-self: stretch;
   position: relative;
   z-index: 10;
   background: var(--color-surface-raised);

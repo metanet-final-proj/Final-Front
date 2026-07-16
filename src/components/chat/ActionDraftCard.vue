@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { workhubApi } from '../../api/workhubApi'
+import ActionResultCallout from './ActionResultCallout.vue'
 
 const props = defineProps({
   draft: {
@@ -17,7 +18,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['confirm'])
+const emit = defineEmits(['confirm', 'dismiss'])
 const isOpen = ref(false)
 const rooms = ref([])
 const roomsLoading = ref(false)
@@ -26,6 +27,7 @@ const completionText = ref('')
 const completionStreaming = ref(false)
 let completionTimer = null
 const form = reactive({
+  reservationId: '',
   date: '',
   startTime: '',
   endTime: '',
@@ -36,6 +38,7 @@ const form = reactive({
 
 const syncForm = () => {
   const values = props.draft?.values || {}
+  form.reservationId = values.reservationId ? String(values.reservationId) : ''
   form.date = values.date || ''
   form.startTime = values.startTime || ''
   form.endTime = values.endTime || defaultEndTime(values.startTime) || ''
@@ -54,7 +57,24 @@ function defaultEndTime(startTime) {
 watch(() => props.draft, syncForm, { immediate: true, deep: true })
 
 const status = computed(() => String(props.draft?.status || 'DRAFT').toUpperCase())
+const actionType = computed(() => String(props.draft?.actionType || 'meeting_room.reserve'))
+const isReservation = computed(() => actionType.value === 'meeting_room.reserve')
+const isUpdate = computed(() => actionType.value === 'meeting_room.update')
+const isCancellation = computed(() => actionType.value === 'meeting_room.cancel')
+const fromReservationList = computed(() => props.draft?.values?.origin === 'meeting_reservation_list')
+const showInlineTrigger = computed(() => !fromReservationList.value)
+const actionLabel = computed(() => {
+  if (isUpdate.value) return '회의실 예약 변경'
+  if (isCancellation.value) return '회의실 예약 취소'
+  return '회의실 예약'
+})
+const actionVerb = computed(() => {
+  if (isUpdate.value) return '변경'
+  if (isCancellation.value) return '취소'
+  return '예약'
+})
 const completed = computed(() => status.value === 'COMPLETED')
+const hiddenAfterCompletion = computed(() => completed.value && (isUpdate.value || isCancellation.value))
 const executing = computed(() => status.value === 'EXECUTING' || props.loading)
 const hasValidTimeRange = computed(() => (
   Boolean(form.startTime && form.endTime) && form.startTime < form.endTime
@@ -62,6 +82,13 @@ const hasValidTimeRange = computed(() => (
 const hasValidTimeStep = computed(() => (
   isTenMinuteTime(form.startTime) && isTenMinuteTime(form.endTime)
 ))
+const hasChanges = computed(() => {
+  if (!isUpdate.value) return true
+  const values = props.draft?.values || {}
+  return String(form.date || '') !== String(values.date || '')
+    || String(form.startTime || '') !== String(values.startTime || '')
+    || String(form.endTime || '') !== String(values.endTime || '')
+})
 const filteredRooms = computed(() => {
   const requiredCapacity = Number(form.capacity) || 0
   return rooms.value.filter((room) => !requiredCapacity || Number(room.capacity) >= requiredCapacity)
@@ -88,9 +115,10 @@ const endMinute = computed({
   set: (value) => setTimePart('endTime', endHour.value, value),
 })
 const canConfirm = computed(() => {
+  if (isCancellation.value) return Boolean(form.reservationId && !executing.value)
   return Boolean(
     form.date && hasValidTimeRange.value && hasValidTimeStep.value
-      && form.roomId && !executing.value,
+      && (isUpdate.value || form.roomId) && hasChanges.value && !executing.value,
   )
 })
 
@@ -176,21 +204,39 @@ const roomSummary = computed(() => {
   return '회의실 미선택'
 })
 
-const completionMessage = computed(() => {
+const completionTitle = computed(() => (
+  isCancellation.value
+    ? '회의실 예약이 취소되었습니다.'
+    : isUpdate.value
+      ? '회의실 예약 시간이 변경되었습니다.'
+      : '회의실 예약이 완료되었습니다.'
+))
+const completionFields = computed(() => {
   const values = props.draft?.values || {}
-  const room = values.roomName || roomSummary.value
-  const date = values.date || ''
   const time = values.startTime && values.endTime
     ? `${values.startTime} - ${values.endTime}`
     : ''
-  const detail = [room, date, time].filter(Boolean).join(' · ')
-  return detail
-    ? `회의실 예약이 완료되었습니다.\n${detail}`
-    : '회의실 예약이 완료되었습니다.'
+  return [
+    { label: '회의실', value: values.roomName || roomSummary.value, emphasis: true },
+    { label: '날짜', value: values.date || '', emphasis: false },
+    { label: '시간', value: time, emphasis: true },
+  ].filter((field) => field.value)
+})
+const completionPresentation = computed(() => ({
+  ...(props.draft?.presentation || {}),
+  tone: props.draft?.presentation?.tone || 'success',
+  title: completionText.value || props.draft?.presentation?.title || completionTitle.value,
+  fields: completionStreaming.value
+    ? []
+    : (props.draft?.presentation?.fields || completionFields.value),
+}))
+const errorPresentation = computed(() => {
+  const message = props.externalError || props.draft?.errorMessage
+  return message ? { tone: 'error', title: message, fields: [] } : null
 })
 
 const showCompletionImmediately = () => {
-  completionText.value = completionMessage.value
+  completionText.value = completionTitle.value
   completionStreaming.value = false
 }
 
@@ -200,9 +246,9 @@ const streamCompletion = () => {
   completionStreaming.value = true
   let index = 0
   completionTimer = setInterval(() => {
-    completionText.value += completionMessage.value[index] || ''
+    completionText.value += completionTitle.value[index] || ''
     index += 1
-    if (index >= completionMessage.value.length) {
+    if (index >= completionTitle.value.length) {
       clearInterval(completionTimer)
       completionTimer = null
       completionStreaming.value = false
@@ -213,11 +259,19 @@ const streamCompletion = () => {
 const openForm = async () => {
   syncForm()
   isOpen.value = true
-  await loadRooms()
+  if (isReservation.value) await loadRooms()
 }
 
+watch(
+  () => props.draft?.draftId,
+  () => {
+    if (props.draft?.autoOpen && !completed.value) openForm()
+  },
+  { immediate: true },
+)
+
 watch(() => form.date, (date, previousDate) => {
-  if (isOpen.value && date !== previousDate) loadRooms()
+  if (isOpen.value && isReservation.value && date !== previousDate) loadRooms()
 })
 
 watch(() => form.capacity, () => {
@@ -231,7 +285,9 @@ watch(selectedRoom, (room) => {
 })
 
 const closeForm = () => {
-  if (!executing.value) isOpen.value = false
+  if (executing.value) return
+  isOpen.value = false
+  if (fromReservationList.value && !completed.value) emit('dismiss', props.draft)
 }
 
 watch(completed, (isCompleted, wasCompleted) => {
@@ -252,11 +308,14 @@ const confirm = () => {
     version: props.draft.version,
     values: {
       ...(props.draft.values || {}),
+      reservationId: form.reservationId ? Number(form.reservationId) : null,
       date: form.date,
       startTime: form.startTime,
       endTime: form.endTime,
-      roomId: selectedRoom.value?.roomId ?? Number(form.roomId),
-      roomName: selectedRoom.value?.name || null,
+      roomId: isReservation.value
+        ? (selectedRoom.value?.roomId ?? Number(form.roomId))
+        : (form.roomId ? Number(form.roomId) : null),
+      roomName: isReservation.value ? (selectedRoom.value?.name || null) : (form.roomName || null),
       selectionNumber: null,
       capacity: form.capacity ? Number(form.capacity) : null,
     },
@@ -265,20 +324,21 @@ const confirm = () => {
 </script>
 
 <template>
-  <section class="action-draft-action">
+  <section v-if="showInlineTrigger && !hiddenAfterCompletion" class="action-draft-action">
     <button
       type="button"
       class="action-draft-open"
       :disabled="completed || executing"
       @click="openForm"
     >
-      {{ completed ? '예약 완료' : executing ? '예약 처리 중...' : '회의실 예약' }}
+      {{ completed ? `${actionVerb} 완료` : executing ? `${actionVerb} 처리 중...` : actionLabel }}
     </button>
   </section>
 
-  <p v-if="completed" class="action-completion-message" aria-live="polite">
-    {{ completionText }}<span v-if="completionStreaming" class="stream-cursor" aria-hidden="true"></span>
-  </p>
+  <ActionResultCallout
+    v-if="completed && !hiddenAfterCompletion"
+    :presentation="completionPresentation"
+  />
 
   <Teleport to="body">
     <div v-if="isOpen" class="action-modal-backdrop" @mousedown.self="closeForm">
@@ -286,18 +346,24 @@ const confirm = () => {
         <header>
           <div>
             <span>최종 승인</span>
-            <h2 id="meeting-action-title">회의실 예약</h2>
+            <h2 id="meeting-action-title">{{ actionLabel }}</h2>
           </div>
           <button type="button" class="action-modal-close" :disabled="executing" aria-label="닫기" @click="closeForm">×</button>
         </header>
 
         <form @submit.prevent="confirm">
-          <div class="action-form-grid">
+          <div v-if="isCancellation" class="action-cancel-summary">
+            <strong>{{ form.roomName || '회의실 예약' }}</strong>
+            <span v-if="form.date">{{ form.date }} {{ form.startTime }} - {{ form.endTime }}</span>
+            <p>이 예약을 취소하면 되돌릴 수 없습니다. 내용을 확인한 뒤 최종 취소해 주세요.</p>
+          </div>
+
+          <div v-else class="action-form-grid">
             <label>
               <span>예약 날짜</span>
               <input v-model="form.date" type="date" required />
             </label>
-            <label>
+            <label v-if="isReservation">
               <span>회의실 이름</span>
               <select v-model="form.roomId" :disabled="roomsLoading" required>
                 <option value="">{{ roomsLoading ? '회의실을 불러오는 중...' : '회의실을 선택하세요' }}</option>
@@ -310,7 +376,12 @@ const confirm = () => {
                 입력한 인원을 수용할 수 있는 회의실이 없습니다.
               </small>
             </label>
-            <label>
+            <label v-else class="action-readonly-field">
+              <span>회의실</span>
+              <div>{{ form.roomName || '선택된 회의실' }}</div>
+              <small>시간만 변경할 수 있습니다.</small>
+            </label>
+            <label v-if="isReservation">
               <span>사용 인원</span>
               <input v-model="form.capacity" type="number" min="1" placeholder="예: 6" />
             </label>
@@ -370,15 +441,19 @@ const confirm = () => {
           <p v-else-if="form.startTime && form.endTime && !hasValidTimeStep" class="action-form-error" role="alert">
             시작 시간과 종료 시간은 10분 단위로 선택해 주세요.
           </p>
-
-          <p v-if="externalError || draft.errorMessage" class="action-form-error" role="alert">
-            {{ externalError || draft.errorMessage }}
+          <p v-else-if="isUpdate && !hasChanges" class="action-form-notice" role="status">
+            변경된 내용이 없습니다. 시간을 변경하면 수정 버튼이 활성화됩니다.
           </p>
 
+          <ActionResultCallout
+            v-if="errorPresentation"
+            :presentation="errorPresentation"
+          />
+
           <footer>
-            <button type="button" class="action-secondary" :disabled="executing" @click="closeForm">취소</button>
+            <button type="button" class="action-secondary" :disabled="executing" @click="closeForm">닫기</button>
             <button type="submit" class="action-primary" :disabled="!canConfirm">
-              {{ executing ? '예약 처리 중...' : '이 내용으로 예약' }}
+              {{ executing ? `${actionVerb} 처리 중...` : `이 내용으로 ${actionVerb}` }}
             </button>
           </footer>
         </form>
@@ -415,28 +490,6 @@ const confirm = () => {
 }
 
 .action-draft-open:disabled { cursor: default; opacity: 0.62; }
-
-.action-completion-message {
-  margin: 12px 0 0;
-  color: var(--color-text);
-  font-size: inherit;
-  line-height: 1.65;
-  white-space: pre-line;
-}
-
-.stream-cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 2px;
-  vertical-align: -0.12em;
-  background: var(--color-primary-light);
-  animation: stream-cursor-blink 0.8s steps(1) infinite;
-}
-
-@keyframes stream-cursor-blink {
-  50% { opacity: 0; }
-}
 
 .action-modal-backdrop {
   position: fixed;
@@ -500,6 +553,19 @@ const confirm = () => {
 .action-form-grid small { color: var(--color-subtle); font-size: 10.5px; line-height: 1.4; }
 .action-form-grid .field-error { color: var(--color-danger); }
 .action-form-error { margin: 14px 0 0; color: var(--color-danger); font-size: 12px; }
+.action-form-notice { margin: 14px 0 0; color: var(--color-subtle); font-size: 12px; }
+.action-readonly-field > div,
+.action-cancel-summary {
+  box-sizing: border-box;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface-soft);
+  color: var(--color-text);
+}
+.action-readonly-field > div { min-height: 40px; padding: 10px; }
+.action-cancel-summary { display: grid; gap: 7px; padding: 15px; font-size: 13px; line-height: 1.5; }
+.action-cancel-summary strong { font-size: 14px; }
+.action-cancel-summary p { margin: 3px 0 0; color: var(--color-subtle); font-size: 12px; }
 
 .action-modal footer { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
 .action-secondary,

@@ -268,6 +268,21 @@ const normalizeMessage = (message) => {
     tag: message.tag || null,
     agentActivity: message.agentActivity || null,
     actionDraft: message.actionDraft || message.action_draft || null,
+    meetingReservations: message.meetingReservations || message.meeting_reservations || null,
+    meetingReservationActionResult:
+      message.meetingReservationActionResult || message.meeting_reservation_action_result || null,
+    meetingRoomAvailableList:
+      message.meetingRoomAvailableList || message.meeting_room_available_list || null,
+    meetingRoomDetail: message.meetingRoomDetail || message.meeting_room_detail || null,
+    visitorParkingRegistrations:
+      message.visitorParkingRegistrations || message.visitor_parking_registrations || null,
+    visitorParkingActionResult:
+      message.visitorParkingActionResult || message.visitor_parking_action_result || null,
+    supplyItems: message.supplyItems || message.supply_items || null,
+    supplyRequests: message.supplyRequests || message.supply_requests || null,
+    supplyRequestActionResult:
+      message.supplyRequestActionResult || message.supply_request_action_result || null,
+    ownerDisplayName: message.ownerDisplayName || message.owner_display_name || null,
     createdAt,
     time: formatKoreanTime(createdAt),
     isLocal: false,
@@ -694,6 +709,19 @@ export const useChatStore = defineStore('chat', {
           replacement = {
             ...normalized,
             agentActivity: normalized.agentActivity || message.agentActivity || null,
+            meetingReservations: normalized.meetingReservations || message.meetingReservations || null,
+            meetingRoomAvailableList:
+              normalized.meetingRoomAvailableList || message.meetingRoomAvailableList || null,
+            meetingRoomDetail: normalized.meetingRoomDetail || message.meetingRoomDetail || null,
+            visitorParkingRegistrations:
+              normalized.visitorParkingRegistrations || message.visitorParkingRegistrations || null,
+            visitorParkingActionResult:
+              normalized.visitorParkingActionResult || message.visitorParkingActionResult || null,
+            supplyItems: normalized.supplyItems || message.supplyItems || null,
+            supplyRequests: normalized.supplyRequests || message.supplyRequests || null,
+            supplyRequestActionResult:
+              normalized.supplyRequestActionResult || message.supplyRequestActionResult || null,
+            ownerDisplayName: normalized.ownerDisplayName || message.ownerDisplayName || null,
           }
 
           return replacement
@@ -759,6 +787,156 @@ export const useChatStore = defineStore('chat', {
         })
       })
       this.messagesByConversationId = updated
+    },
+
+    setMessageActionDraft(conversationId, messageId, actionDraft) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId)
+            ? { ...message, actionDraft }
+            : message
+        )),
+      }
+    },
+
+    setMessageMeetingReservations(conversationId, messageId, reservations, ownerDisplayName = null) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId)
+            ? {
+                ...message,
+                meetingReservations: reservations,
+                ownerDisplayName: ownerDisplayName || message.ownerDisplayName || null,
+              }
+            : message
+        )),
+      }
+    },
+
+    setMessageMeetingReservationActionResult(conversationId, messageId, actionResult) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId)
+            ? { ...message, meetingReservationActionResult: actionResult }
+            : message
+        )),
+      }
+    },
+
+    setMessageMeetingRoomAvailableList(conversationId, messageId, data) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId)
+            ? { ...message, meetingRoomAvailableList: data }
+            : message
+        )),
+      }
+    },
+
+    setMessageMeetingRoomDetail(conversationId, messageId, data) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId)
+            ? { ...message, meetingRoomDetail: data }
+            : message
+        )),
+      }
+    },
+
+    setMessageVisitorParkingRegistrations(
+      conversationId,
+      messageId,
+      registrations,
+      ownerDisplayName = null,
+    ) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId)
+            ? {
+                ...message,
+                visitorParkingRegistrations: registrations,
+                ownerDisplayName: ownerDisplayName || message.ownerDisplayName || null,
+              }
+            : message
+        )),
+      }
+    },
+
+    setMessageVisitorParkingActionResult(conversationId, messageId, actionResult) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId)
+            ? { ...message, visitorParkingActionResult: actionResult }
+            : message
+        )),
+      }
+    },
+
+    setMessageSupplyItems(conversationId, messageId, items) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId) ? { ...message, supplyItems: items } : message
+        )),
+      }
+    },
+
+    setMessageSupplyRequests(conversationId, messageId, requests, ownerDisplayName = null) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId)
+            ? {
+                ...message,
+                supplyRequests: requests,
+                ownerDisplayName: ownerDisplayName || message.ownerDisplayName || null,
+              }
+            : message
+        )),
+      }
+    },
+
+    setMessageSupplyRequestActionResult(conversationId, messageId, actionResult) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId)
+            ? { ...message, supplyRequestActionResult: actionResult }
+            : message
+        )),
+      }
+    },
+
+    async createMeetingRoomActionDraft(payload) {
+      const response = await chatApi.createMeetingRoomActionDraft(payload)
+      return response.data
+    },
+
+    async createVisitorParkingActionDraft(payload) {
+      const response = await chatApi.createVisitorParkingActionDraft(payload)
+      return response.data
+    },
+
+    async createSupplyActionDraft(payload) {
+      const response = await chatApi.createSupplyActionDraft(payload)
+      return response.data
     },
 
     async confirmActionDraft({ draftId, version, values }) {
@@ -932,6 +1110,57 @@ export const useChatStore = defineStore('chat', {
                   agentActivity,
                 })
               }
+              return
+            }
+            if (parsed.event === 'meeting_reservation_list') {
+              this.setMessageMeetingReservations(
+                conversationId,
+                localAssistantMessageId,
+                parsed.data?.reservations || [],
+                parsed.data?.ownerDisplayName || parsed.data?.owner_display_name || null,
+              )
+              return
+            }
+            if (parsed.event === 'meeting_room_available_list') {
+              this.setMessageMeetingRoomAvailableList(
+                conversationId,
+                localAssistantMessageId,
+                parsed.data || {},
+              )
+              return
+            }
+            if (parsed.event === 'meeting_room_detail') {
+              this.setMessageMeetingRoomDetail(
+                conversationId,
+                localAssistantMessageId,
+                parsed.data || {},
+              )
+              return
+            }
+            if (parsed.event === 'visitor_parking_registration_list') {
+              this.setMessageVisitorParkingRegistrations(
+                conversationId,
+                localAssistantMessageId,
+                parsed.data?.registrations || [],
+                parsed.data?.ownerDisplayName || parsed.data?.owner_display_name || null,
+              )
+              return
+            }
+            if (parsed.event === 'supply_item_list') {
+              this.setMessageSupplyItems(
+                conversationId,
+                localAssistantMessageId,
+                parsed.data?.items || [],
+              )
+              return
+            }
+            if (parsed.event === 'supply_request_list') {
+              this.setMessageSupplyRequests(
+                conversationId,
+                localAssistantMessageId,
+                parsed.data?.requests || [],
+                parsed.data?.ownerDisplayName || parsed.data?.owner_display_name || null,
+              )
               return
             }
             const statusText = getStatusText(parsed)

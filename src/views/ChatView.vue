@@ -10,7 +10,6 @@ import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
-import officeLinkTitle from '../assets/images/officelink-logo-title-wide-nobg.svg'
 import { useWorkhubStore } from '../stores/workhubStore'
 import { speechApi } from '../api/speechApi'
 import AdminDashboardPanel from '../components/admin/AdminDashboardPanel.vue'
@@ -18,6 +17,14 @@ import ChatSidebar from '../components/chat/ChatSidebar.vue'
 import WorkhubDetailPanel from '../components/chat/WorkhubDetailPanel.vue'
 import MyPagePanel from '../components/mypage/MyPagePanel.vue'
 import ActionDraftCard from '../components/chat/ActionDraftCard.vue'
+import MeetingReservationListCard from '../components/chat/MeetingReservationListCard.vue'
+import MeetingRoomAvailableListCard from '../components/chat/MeetingRoomAvailableListCard.vue'
+import MeetingRoomDetailCard from '../components/chat/MeetingRoomDetailCard.vue'
+import VisitorParkingActionDraftCard from '../components/chat/VisitorParkingActionDraftCard.vue'
+import VisitorParkingRegistrationListCard from '../components/chat/VisitorParkingRegistrationListCard.vue'
+import SupplyActionDraftCard from '../components/chat/SupplyActionDraftCard.vue'
+import SupplyItemListCard from '../components/chat/SupplyItemListCard.vue'
+import SupplyRequestListCard from '../components/chat/SupplyRequestListCard.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -145,6 +152,9 @@ const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
 const confirmingActionDraftId = ref(null)
 const actionDraftErrors = ref({})
+const preparingReservationId = ref(null)
+const preparingParkingRequestId = ref(null)
+const preparingSupplyRequestId = ref(null)
 const composingNewChat = ref(true)
 const isDarkMode = ref(getInitialDarkMode())
 const isRecording = ref(false)
@@ -780,13 +790,65 @@ const confirmActionDraft = async (payload) => {
   try {
     const result = await chatStore.confirmActionDraft(payload)
     if (String(result?.status || '').toUpperCase() === 'COMPLETED') {
+      const actionType = String(result?.actionType || '')
+      if (
+        (actionType === 'meeting_room.update' || actionType === 'meeting_room.cancel')
+        && result?.sourceAssistantMessageId
+        && Array.isArray(result?.meetingReservations)
+      ) {
+        chatStore.setMessageMeetingReservations(
+          activeRoomId.value,
+          result.sourceAssistantMessageId,
+          result.meetingReservations,
+        )
+        chatStore.setMessageMeetingReservationActionResult(
+          activeRoomId.value,
+          result.sourceAssistantMessageId,
+          result.meetingReservationActionResult || null,
+        )
+        chatStore.setMessageActionDraft(activeRoomId.value, result.sourceAssistantMessageId, null)
+      }
+      if (
+        (actionType === 'visitor_parking.update' || actionType === 'visitor_parking.cancel')
+        && result?.sourceAssistantMessageId
+        && Array.isArray(result?.visitorParkingRegistrations)
+      ) {
+        chatStore.setMessageVisitorParkingRegistrations(
+          activeRoomId.value,
+          result.sourceAssistantMessageId,
+          result.visitorParkingRegistrations,
+        )
+        chatStore.setMessageVisitorParkingActionResult(
+          activeRoomId.value,
+          result.sourceAssistantMessageId,
+          result.visitorParkingActionResult || null,
+        )
+        chatStore.setMessageActionDraft(activeRoomId.value, result.sourceAssistantMessageId, null)
+      }
+      if (
+        (actionType === 'supply.update' || actionType === 'supply.cancel')
+        && result?.sourceAssistantMessageId
+        && Array.isArray(result?.supplyRequests)
+      ) {
+        chatStore.setMessageSupplyRequests(
+          activeRoomId.value,
+          result.sourceAssistantMessageId,
+          result.supplyRequests,
+        )
+        chatStore.setMessageSupplyRequestActionResult(
+          activeRoomId.value,
+          result.sourceAssistantMessageId,
+          result.supplyRequestActionResult || null,
+        )
+        chatStore.setMessageActionDraft(activeRoomId.value, result.sourceAssistantMessageId, null)
+      }
       await refreshWorkhubSidebar()
     }
   } catch (error) {
     const message =
       error.response?.data?.message ||
       error.response?.data?.error?.message ||
-      '회의실 예약에 실패했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.'
+      '요청 처리에 실패했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.'
     actionDraftErrors.value = {
       ...actionDraftErrors.value,
       [payload.draftId]: message,
@@ -794,6 +856,166 @@ const confirmActionDraft = async (payload) => {
   } finally {
     confirmingActionDraftId.value = null
   }
+}
+
+const formatDraftDate = (value) => {
+  const date = value ? new Date(value) : null
+  return date && !Number.isNaN(date.getTime())
+    ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    : ''
+}
+
+const formatDraftTime = (value) => {
+  const date = value ? new Date(value) : null
+  return date && !Number.isNaN(date.getTime())
+    ? `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+    : ''
+}
+
+const createMeetingRoomDraft = async (message, actionType, values, loadingId = null) => {
+  if (!message?.id || preparingReservationId.value) return
+  preparingReservationId.value = loadingId || values.reservationId || values.roomId || 'meeting-room-draft'
+  try {
+    const draft = await chatStore.createMeetingRoomActionDraft({
+      conversationId: activeRoomId.value,
+      actionType,
+      sourceAssistantMessageId: Number(message.messageId || message.id),
+      ...values,
+    })
+    chatStore.setMessageActionDraft(activeRoomId.value, message.id, { ...draft, autoOpen: true })
+  } catch (error) {
+    console.error('Failed to prepare meeting room action draft:', error)
+  } finally {
+    preparingReservationId.value = null
+  }
+}
+
+const prepareMeetingReservationAction = async (message, actionType, reservation) => {
+  if (!reservation?.reservationId) return
+  return createMeetingRoomDraft(message, actionType, {
+    origin: 'meeting_reservation_list',
+    reservationId: Number(reservation.reservationId),
+    roomId: reservation.roomId ? Number(reservation.roomId) : null,
+    roomName: reservation.roomName || null,
+    date: formatDraftDate(reservation.startAt),
+    startTime: formatDraftTime(reservation.startAt),
+    endTime: formatDraftTime(reservation.endAt),
+  }, reservation.reservationId)
+}
+
+const createVisitorParkingDraft = async (message, actionType, values, loadingId = null) => {
+  if (!message?.id || preparingParkingRequestId.value) return
+  preparingParkingRequestId.value = loadingId || values.requestId || 'visitor-parking-draft'
+  try {
+    const draft = await chatStore.createVisitorParkingActionDraft({
+      conversationId: activeRoomId.value,
+      actionType,
+      sourceAssistantMessageId: Number(message.messageId || message.id),
+      ...values,
+    })
+    chatStore.setMessageActionDraft(activeRoomId.value, message.id, { ...draft, autoOpen: true })
+  } catch (error) {
+    console.error('Failed to prepare visitor parking action draft:', error)
+  } finally {
+    preparingParkingRequestId.value = null
+  }
+}
+
+const prepareVisitorParkingAction = async (message, actionType, registration) => {
+  if (!registration?.requestId) return
+  return createVisitorParkingDraft(message, actionType, {
+    origin: 'visitor_parking_list',
+    requestId: Number(registration.requestId),
+    parkingLotId: registration.parkingLotId ? Number(registration.parkingLotId) : null,
+    parkingLotName: registration.parkingLotName || null,
+    parkingLotLocation: registration.parkingLotLocation || null,
+    visitorName: registration.visitorName || null,
+    visitorPhone: registration.visitorPhone || null,
+    carNumber: registration.carNumber || null,
+    visitDate: registration.visitDate || null,
+  }, registration.requestId)
+}
+
+const isVisitorParkingActionDraft = (draft) => (
+  String(draft?.actionType || '').startsWith('visitor_parking.')
+)
+
+const isSupplyActionDraft = (draft) => String(draft?.actionType || '').startsWith('supply.')
+
+const createSupplyDraft = async (message, actionType, values, loadingId = null) => {
+  if (!message?.id || preparingSupplyRequestId.value) return
+  preparingSupplyRequestId.value = loadingId || values.requestId || values.itemId || 'supply-draft'
+  try {
+    const draft = await chatStore.createSupplyActionDraft({
+      conversationId: activeRoomId.value,
+      actionType,
+      sourceAssistantMessageId: Number(message.messageId || message.id),
+      ...values,
+    })
+    chatStore.setMessageActionDraft(activeRoomId.value, message.id, { ...draft, autoOpen: true })
+  } catch (error) {
+    console.error('Failed to prepare supply action draft:', error)
+  } finally {
+    preparingSupplyRequestId.value = null
+  }
+}
+
+const prepareSupplyRequestFromItem = (message, item) => createSupplyDraft(message, 'supply.request', {
+  origin: 'supply_item_list',
+  requestId: null,
+  itemId: item.itemId ? Number(item.itemId) : null,
+  itemName: item.itemName || null,
+  category: item.category || null,
+  quantity: 1,
+  reason: null,
+}, item.itemId)
+
+const prepareSupplyRequestAction = (message, actionType, request) => createSupplyDraft(message, actionType, {
+  origin: 'supply_request_list',
+  requestId: request.requestId ? Number(request.requestId) : null,
+  itemId: request.itemId ? Number(request.itemId) : null,
+  itemName: request.itemName || null,
+  category: request.category || null,
+  quantity: Number(request.quantity || 1),
+  reason: request.reason || null,
+}, request.requestId)
+
+const hasStructuredMessageContent = (message) => Boolean(
+  message?.actionDraft
+  || message?.meetingReservations
+  || message?.meetingRoomAvailableList
+  || message?.meetingRoomDetail
+  || message?.visitorParkingRegistrations
+  || message?.supplyItems
+  || message?.supplyRequests
+)
+
+const dismissListActionDraft = (message, actionDraft) => {
+  const origin = String(actionDraft?.values?.origin || '')
+  if (!['meeting_reservation_list', 'visitor_parking_list', 'supply_item_list', 'supply_request_list'].includes(origin)) return
+  chatStore.setMessageActionDraft(activeRoomId.value, message.id, null)
+}
+
+const prepareRoomReservationFromQuery = async (message, room, condition = {}) => {
+  if (!message?.messageId) return
+  const startTime = condition.startTime || condition.start_time || room.availableStartTime || ''
+  const endTime = condition.endTime || condition.end_time || room.availableEndTime || ''
+  return createMeetingRoomDraft(message, 'meeting_room.reserve', {
+    origin: 'meeting_room_query_card',
+    reservationId: null,
+    roomId: room.roomId ? Number(room.roomId) : null,
+    roomName: room.roomName || null,
+    date: condition.date || room.availabilityDate || '',
+    startTime,
+    endTime,
+    capacity: condition.capacity || room.capacity || null,
+  }, room.roomId)
+}
+
+const requestMeetingRoomDetail = async (room, condition = {}) => {
+  if (!room?.roomName || isAnswering.value) return
+  const date = condition.date ? ` ${condition.date}` : ''
+  await sendMessage(`${room.roomName} 회의실의${date} 상세 정보와 예약 가능 시간을 알려줘`)
 }
 
 const runPanelAction = async () => {
@@ -977,58 +1199,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="chat-shell page">
-    <header class="app-header">
-      <div class="header-actions">
-        <button
-          class="theme-toggle-button"
-          :class="{ dark: isDarkMode }"
-          type="button"
-          :aria-pressed="isDarkMode"
-          :aria-label="isDarkMode ? '라이트 모드로 변경' : '다크 모드로 변경'"
-          @click="toggleDarkMode"
-        >
-          <span class="theme-toggle-knob" aria-hidden="true">
-            <svg
-              v-if="isDarkMode"
-              width="16"
-              height="16"
-              viewBox="0 0 30 30"
-              fill="none"
-            >
-              <path
-                d="M18.8 22.8C12.8 22.8 8 18 8 12c0-2.1.6-4 1.6-5.7A9.9 9.9 0 1 0 23.7 20.4c-1.5 1.5-3.5 2.4-4.9 2.4Z"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linejoin="round"
-              />
-              <path d="M21.8 5.8l.7 1.7 1.7.7-1.7.7-.7 1.7-.7-1.7-1.7-.7 1.7-.7.7-1.7Z" fill="currentColor" />
-              <path d="M25 12.8l.5 1.2 1.2.5-1.2.5-.5 1.2-.5-1.2-1.2-.5 1.2-.5.5-1.2Z" fill="currentColor" />
-            </svg>
-
-            <svg
-              v-else
-              width="17"
-              height="17"
-              viewBox="0 0 32 32"
-              fill="none"
-            >
-              <circle cx="16" cy="16" r="6.5" stroke="currentColor" stroke-width="2" />
-              <path
-                d="M16 3.5v4M16 24.5v4M3.5 16h4M24.5 16h4M7.2 7.2l2.8 2.8M22 22l2.8 2.8M24.8 7.2 22 10M10 22l-2.8 2.8"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </svg>
-          </span>
-        </button>
-      </div>
-    </header>
-
     <div class="chat-body">
       <ChatSidebar
         ref="chatSidebarRef"
         :can-access-admin-dashboard="canAccessAdminDashboard"
+        :is-dark-mode="isDarkMode"
         :is-answering="isAnswering"
         :logout-loading="logoutLoading"
         @create-new-chat="createNewChat"
@@ -1039,6 +1214,7 @@ onBeforeUnmount(() => {
         @refresh-workhub="refreshWorkhubSidebar"
         @room-deleted="handleRoomDeleted"
         @select-room="selectRoom"
+        @toggle-theme="toggleDarkMode"
         @toggle-panel="togglePanel"
       />
 
@@ -1076,7 +1252,7 @@ onBeforeUnmount(() => {
         </h2>
 
         <p class="start-description">
-          회의실 예약, 주차 등록, 식당 정보, 비품 신청, 사내 규정 검색까지<br />
+          회의실 예약, 방문객 주차 등록, 식당 정보, 비품 신청, 사내 규정 검색까지<br />
           자연어로 편하게 요청해 주세요.
         </p>
       </div>
@@ -1164,7 +1340,10 @@ onBeforeUnmount(() => {
         v-for="message in visibleMessages"
         :key="message.id"
         class="message-row"
-        :class="message.role"
+        :class="[
+          message.role,
+          { 'has-structured-content': hasStructuredMessageContent(message) },
+        ]"
       >
         <template v-if="message.role === 'assistant'">
           <img
@@ -1274,11 +1453,89 @@ onBeforeUnmount(() => {
               ></div>
 
               <ActionDraftCard
-                v-if="message.actionDraft"
+                v-if="message.actionDraft && !isVisitorParkingActionDraft(message.actionDraft) && !isSupplyActionDraft(message.actionDraft) && ((!message.meetingRoomAvailableList && !message.meetingRoomDetail) || (message.actionDraft.values?.origin === 'meeting_room_query_card' && String(message.actionDraft.status || '').toUpperCase() !== 'COMPLETED'))"
                 :draft="message.actionDraft"
                 :loading="confirmingActionDraftId === message.actionDraft.draftId"
                 :external-error="actionDraftErrors[message.actionDraft.draftId] || ''"
                 @confirm="confirmActionDraft"
+                @dismiss="(draft) => dismissListActionDraft(message, draft)"
+              />
+
+              <VisitorParkingActionDraftCard
+                v-if="message.actionDraft && isVisitorParkingActionDraft(message.actionDraft)"
+                :draft="message.actionDraft"
+                :loading="confirmingActionDraftId === message.actionDraft.draftId"
+                :external-error="actionDraftErrors[message.actionDraft.draftId] || ''"
+                @confirm="confirmActionDraft"
+                @dismiss="(draft) => dismissListActionDraft(message, draft)"
+              />
+
+              <SupplyActionDraftCard
+                v-if="message.actionDraft && isSupplyActionDraft(message.actionDraft)"
+                :draft="message.actionDraft"
+                :loading="confirmingActionDraftId === message.actionDraft.draftId"
+                :external-error="actionDraftErrors[message.actionDraft.draftId] || ''"
+                @confirm="confirmActionDraft"
+                @dismiss="(draft) => dismissListActionDraft(message, draft)"
+              />
+
+              <MeetingReservationListCard
+                v-if="message.meetingReservations"
+                :reservations="message.meetingReservations"
+                :action-result="message.meetingReservationActionResult"
+                :loading-reservation-id="preparingReservationId"
+                :owner-display-name="message.ownerDisplayName"
+                @edit="(reservation) => prepareMeetingReservationAction(message, 'meeting_room.update', reservation)"
+                @cancel="(reservation) => prepareMeetingReservationAction(message, 'meeting_room.cancel', reservation)"
+              />
+
+              <MeetingRoomAvailableListCard
+                v-if="message.meetingRoomAvailableList"
+                :data="message.meetingRoomAvailableList"
+                :actions-enabled="Boolean(message.messageId)"
+                :actions-loading="Boolean(preparingReservationId)"
+                :action-draft="message.actionDraft"
+                @reserve="(room) => prepareRoomReservationFromQuery(message, room, message.meetingRoomAvailableList.condition || {})"
+                @detail="(room) => requestMeetingRoomDetail(room, message.meetingRoomAvailableList.condition || {})"
+              />
+
+              <MeetingRoomDetailCard
+                v-if="message.meetingRoomDetail"
+                :data="message.meetingRoomDetail"
+                :actions-enabled="Boolean(message.messageId)"
+                :actions-loading="Boolean(preparingReservationId)"
+                :action-draft="message.actionDraft"
+                @reserve="(room) => prepareRoomReservationFromQuery(message, room, message.meetingRoomDetail.requestedCondition || {})"
+              />
+
+              <VisitorParkingRegistrationListCard
+                v-if="message.visitorParkingRegistrations"
+                :registrations="message.visitorParkingRegistrations"
+                :action-result="message.visitorParkingActionResult"
+                :loading-request-id="preparingParkingRequestId"
+                :owner-display-name="message.ownerDisplayName"
+                @edit="(registration) => prepareVisitorParkingAction(message, 'visitor_parking.update', registration)"
+                @cancel="(registration) => prepareVisitorParkingAction(message, 'visitor_parking.cancel', registration)"
+              />
+
+              <SupplyItemListCard
+                v-if="message.supplyItems"
+                :items="message.supplyItems"
+                :loading-item-id="preparingSupplyRequestId"
+                :actions-enabled="Boolean(message.messageId)"
+                :action-draft="message.actionDraft"
+                @request="(item) => prepareSupplyRequestFromItem(message, item)"
+              />
+
+              <SupplyRequestListCard
+                v-if="message.supplyRequests"
+                :requests="message.supplyRequests"
+                :action-result="message.supplyRequestActionResult"
+                :loading-request-id="preparingSupplyRequestId"
+                :owner-display-name="message.ownerDisplayName"
+                :actions-enabled="Boolean(message.messageId)"
+                @edit="(request) => prepareSupplyRequestAction(message, 'supply.update', request)"
+                @cancel="(request) => prepareSupplyRequestAction(message, 'supply.cancel', request)"
               />
             </div>
 
@@ -1374,104 +1631,21 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+:global(html),
+:global(body),
+:global(#app) {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .chat-shell {
-  height: 100vh;
+  height: 100%;
   color: var(--color-text);
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
-}
-
-.app-header {
-  height: 68px;
-  min-width: 0;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 5;
-  background: var(--color-surface-raised);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 0 28px;
-}
-
-.header-title-area h1 {
-  font-family: 'BBH Hegarty';
-  margin: 0;
-  font-size: 40px;
-  font-weight: 800;
-  letter-spacing: -0.3px;
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-}
-
-.header-title-logo {
-  width: 50px;
-  height: auto;
-  display: block;
-  transform: translateX(15px);
-}
-
-.header-title-area p {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: var(--color-subtle);
-}
-
-.header-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
-
-.theme-toggle-button {
-  width: 54px;
-  height: 28px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface-disabled);
-  color: var(--color-text);
-  padding: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  box-shadow: 0 8px 18px rgba(var(--color-primary-rgb), 0.08);
-  transition:
-    background 0.18s ease,
-    color 0.18s ease,
-    border-color 0.18s ease;
-}
-
-.theme-toggle-button.dark {
-  background: var(--color-markdown-pre-bg);
-  color: var(--color-white);
-  border-color: var(--color-markdown-pre-bg);
-}
-
-.theme-toggle-knob {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  border-radius: 50%;
-  background: var(--color-toggle-knob);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 10px rgba(var(--color-primary-rgb), 0.12);
-  transform: translateX(0);
-  transition:
-    transform 0.18s ease,
-    color 0.18s ease;
-}
-
-.theme-toggle-button.dark .theme-toggle-knob {
-  color: var(--color-markdown-pre-bg);
-  transform: translateX(26px);
+  /* Keep scrolling inside the chat, sidebar, and panel containers. */
+  overflow: hidden;
 }
 
 .chat-body {
@@ -1484,7 +1658,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   gap: 20px;
-  padding: 20px 24px 20px 0;
+  padding: 0 24px 0 0;
 }
 
 .chat-main {
@@ -1492,7 +1666,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1759,7 +1933,7 @@ onBeforeUnmount(() => {
 
 .thread-area {
   flex: 1;
-  min-height: 280px;
+  min-height: 0;
   overflow-y: auto;
   background: var(--color-surface-thread);
   padding: 22px 28px;
@@ -1787,7 +1961,12 @@ onBeforeUnmount(() => {
   flex-direction: row;
   gap: 12px;
   align-items: flex-start;
-  max-width: 78%;
+  max-width: min(88%, 1120px);
+}
+
+.message-row.assistant.has-structured-content {
+  width: min(96%, 1320px);
+  max-width: none;
 }
 
 .message-row.user {
@@ -1799,10 +1978,16 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .message-content.has-agent-activity {
-  width: min(620px, 100%);
+  width: 100%;
+}
+
+.message-row.has-structured-content .message-content {
+  width: 100%;
 }
 
 .message-tag {
@@ -2272,6 +2457,14 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1100px) {
+  .message-row.assistant {
+    max-width: 92%;
+  }
+
+  .message-row.assistant.has-structured-content {
+    width: 98%;
+  }
+
   .start-screen {
     padding: 42px 34px 34px;
   }
@@ -2285,31 +2478,8 @@ onBeforeUnmount(() => {
     padding-top: 36px;
   }
 
-  .app-header {
-    padding: 0 18px;
-  }
-
-  .header-title-area p {
-    display: none;
-  }
-
-  .theme-toggle-button {
-    width: 50px;
-    height: 26px;
-  }
-
-  .theme-toggle-knob {
-    width: 18px;
-    height: 18px;
-    flex-basis: 18px;
-  }
-
-  .theme-toggle-button.dark .theme-toggle-knob {
-    transform: translateX(24px);
-  }
-
   .chat-body {
-    padding: 14px 14px 14px 0;
+    padding: 0 14px 0 0;
     gap: 14px;
   }
 
@@ -2324,6 +2494,12 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 820px) {
+  .message-row.assistant,
+  .message-row.assistant.has-structured-content {
+    width: 100%;
+    max-width: none;
+  }
+
   .start-screen {
   padding: 32px 20px 26px;
 }
@@ -2380,7 +2556,7 @@ onBeforeUnmount(() => {
     padding: 15px 14px;
   }
   .chat-body {
-    padding: 10px;
+    padding: 0 10px;
     gap: 0;
   }
 
@@ -2401,7 +2577,7 @@ onBeforeUnmount(() => {
   }
 
   .thread-area {
-    padding: 18px 20px;
+    padding: 16px 14px;
   }
 }
 </style>

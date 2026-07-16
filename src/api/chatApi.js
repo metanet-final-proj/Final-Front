@@ -198,6 +198,18 @@ export const chatApi = {
     )
   },
 
+  createMeetingRoomActionDraft(payload) {
+    return apiClient.post('/api/v1/chat/action-drafts/meeting-room', payload)
+  },
+
+  createVisitorParkingActionDraft(payload) {
+    return apiClient.post('/api/v1/chat/action-drafts/visitor-parking', payload)
+  },
+
+  createSupplyActionDraft(payload) {
+    return apiClient.post('/api/v1/chat/action-drafts/supply', payload)
+  },
+
   async sendMessageStream(conversationId, message, handlers = {}, requestOptions = {}) {
     const baseUrl = getApiBaseUrl()
     const authStore = useAuthStore()
