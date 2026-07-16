@@ -246,8 +246,9 @@ watch(() => props.draft?.draftId, () => {
 
 <style scoped>
 .draft-trigger { margin-top: 12px; }
-.draft-trigger button, .primary { border: 0; border-radius: 6px; background: var(--color-primary); color: white; font-weight: 800; cursor: pointer; }
-.draft-trigger button { min-height: 34px; padding: 0 13px; }
+.draft-trigger button { min-height: 36px; padding: 0 15px; border: 1px solid var(--color-border); border-radius: 18px; background: var(--color-surface-raised); color: var(--color-text); font-weight: 700; cursor: pointer; }
+.draft-trigger button:hover:not(:disabled) { border-color: var(--color-primary-light); color: var(--color-primary-light); }
+.primary { border: 1px solid var(--color-primary); border-radius: 6px; background: var(--color-primary); color: var(--color-white); font-weight: 700; cursor: pointer; }
 button:disabled { cursor: default; opacity: .55; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .48); }
 .modal { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface-raised); box-shadow: 0 18px 50px rgba(15, 23, 42, .22); }
@@ -265,7 +266,7 @@ textarea { resize: vertical; }
 .form-error { margin: 0; color: var(--color-danger); font-size: 12px; }
 .form-note { margin: 0; color: var(--color-warning-text); font-size: 12px; }
 .modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--color-border-light); }
-.modal footer button { min-height: 36px; padding: 0 14px; border-radius: 6px; font: inherit; font-weight: 800; }
+.modal footer button { min-height: 38px; padding: 0 15px; border-radius: 6px; font: inherit; font-weight: 700; }
 .secondary { border: 1px solid var(--color-border); background: var(--color-surface-raised); color: var(--color-text); }
 @media (max-width: 520px) { .modal-backdrop { padding: 10px; } .form-grid { grid-template-columns: 1fr; padding: 16px; } .wide, .form-error, .form-note { grid-column: 1; } }
 </style>

@@ -250,6 +250,19 @@ const normalizeRole = (role) => {
   return 'assistant'
 }
 
+const normalizeSupplyItem = (item = {}) => ({
+  ...item,
+  itemId: item.itemId ?? item.item_id ?? item.id ?? null,
+  itemName: item.itemName ?? item.item_name ?? item.name ?? item.supplyItemName ?? null,
+  category: item.category ?? null,
+  stockQuantity: Number(item.stockQuantity ?? item.stock_quantity ?? 0),
+  status: item.status ?? 'ACTIVE',
+})
+
+const normalizeSupplyItems = (items) => (
+  Array.isArray(items) ? items.map(normalizeSupplyItem) : null
+)
+
 const normalizeMessage = (message) => {
   const messageId = message.messageId || message.message_id || message.id || null
   const conversationId =
@@ -278,10 +291,12 @@ const normalizeMessage = (message) => {
       message.visitorParkingRegistrations || message.visitor_parking_registrations || null,
     visitorParkingActionResult:
       message.visitorParkingActionResult || message.visitor_parking_action_result || null,
-    supplyItems: message.supplyItems || message.supply_items || null,
+    supplyItems: normalizeSupplyItems(message.supplyItems || message.supply_items),
     supplyRequests: message.supplyRequests || message.supply_requests || null,
     supplyRequestActionResult:
       message.supplyRequestActionResult || message.supply_request_action_result || null,
+    supplyItemActionResult:
+      message.supplyItemActionResult || message.supply_item_action_result || null,
     ownerDisplayName: message.ownerDisplayName || message.owner_display_name || null,
     createdAt,
     time: formatKoreanTime(createdAt),
@@ -721,6 +736,8 @@ export const useChatStore = defineStore('chat', {
             supplyRequests: normalized.supplyRequests || message.supplyRequests || null,
             supplyRequestActionResult:
               normalized.supplyRequestActionResult || message.supplyRequestActionResult || null,
+            supplyItemActionResult:
+              normalized.supplyItemActionResult || message.supplyItemActionResult || null,
             ownerDisplayName: normalized.ownerDisplayName || message.ownerDisplayName || null,
           }
 
@@ -891,7 +908,9 @@ export const useChatStore = defineStore('chat', {
       this.messagesByConversationId = {
         ...this.messagesByConversationId,
         [key]: (this.messagesByConversationId[key] || []).map((message) => (
-          String(message.id) === String(messageId) ? { ...message, supplyItems: items } : message
+          String(message.id) === String(messageId)
+            ? { ...message, supplyItems: normalizeSupplyItems(items) || [] }
+            : message
         )),
       }
     },
@@ -919,6 +938,18 @@ export const useChatStore = defineStore('chat', {
         [key]: (this.messagesByConversationId[key] || []).map((message) => (
           String(message.id) === String(messageId)
             ? { ...message, supplyRequestActionResult: actionResult }
+            : message
+        )),
+      }
+    },
+
+    setMessageSupplyItemActionResult(conversationId, messageId, actionResult) {
+      const key = String(conversationId)
+      this.messagesByConversationId = {
+        ...this.messagesByConversationId,
+        [key]: (this.messagesByConversationId[key] || []).map((message) => (
+          String(message.id) === String(messageId)
+            ? { ...message, supplyItemActionResult: actionResult }
             : message
         )),
       }

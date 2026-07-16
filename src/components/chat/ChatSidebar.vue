@@ -873,7 +873,7 @@ onBeforeUnmount(() => {
   gap: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 2px;
+  padding: 14px 2px 0 0;
   scrollbar-width: thin;
   scrollbar-color: var(--color-scrollbar) transparent;
 }
@@ -899,7 +899,7 @@ onBeforeUnmount(() => {
 
 .sidebar.collapsed .sidebar-content {
   align-items: center;
-  padding-right: 0;
+  padding: 14px 0 0;
   overflow: hidden;
 }
 

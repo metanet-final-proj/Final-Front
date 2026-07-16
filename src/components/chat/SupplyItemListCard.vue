@@ -7,17 +7,18 @@ const props = defineProps({
   loadingItemId: { type: [String, Number], default: null },
   actionsEnabled: { type: Boolean, default: true },
   actionDraft: { type: Object, default: null },
+  actionResult: { type: Object, default: null },
 })
 
 const emit = defineEmits(['request'])
 const visibleItems = computed(() => props.items.filter((item) => item?.itemId))
-const completedPresentation = computed(() => (
+const completedPresentation = computed(() => props.actionResult?.presentation || (
   String(props.actionDraft?.status || '').toUpperCase() === 'COMPLETED'
     ? props.actionDraft?.presentation || null
     : null
 ))
 const completedItemId = computed(() => completedPresentation.value
-  ? props.actionDraft?.values?.itemId
+  ? props.actionResult?.itemId || props.actionDraft?.values?.itemId
   : null)
 
 function stockText(item) {
@@ -45,7 +46,7 @@ function canRequest(item) {
         <thead><tr><th>품목</th><th>분류</th><th>재고</th><th><span class="sr-only">작업</span></th></tr></thead>
         <tbody>
           <tr v-for="item in visibleItems" :key="item.itemId">
-            <td><strong>{{ item.itemName || '이름 없는 품목' }}</strong></td>
+            <td><strong>{{ item.itemName || item.name || '이름 없는 품목' }}</strong></td>
             <td>{{ item.category || '-' }}</td>
             <td :class="{ depleted: !canRequest(item) }">{{ stockText(item) }}</td>
             <td class="actions">
@@ -74,7 +75,7 @@ th, td { padding: 10px 11px; border-top: 1px solid var(--color-border-light); te
 th { color: var(--color-subtle); background: var(--color-surface-raised); }
 .depleted { color: var(--color-danger); }
 .actions { text-align: right; white-space: nowrap; }
-button { min-height: 30px; border: 0; border-radius: 5px; padding: 0 10px; background: var(--color-primary); color: white; font: inherit; font-weight: 700; cursor: pointer; }
+button { min-height: 28px; border: 1px solid var(--color-primary); border-radius: 5px; padding: 0 10px; background: var(--color-primary); color: var(--color-white); font: inherit; font-weight: 700; cursor: pointer; }
 button:disabled { cursor: default; opacity: .5; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 @media (max-width: 680px) { table { min-width: 460px; font-size: 10px; } th, td { padding: 8px; } }

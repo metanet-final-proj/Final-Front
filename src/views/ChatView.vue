@@ -826,6 +826,22 @@ const confirmActionDraft = async (payload) => {
         chatStore.setMessageActionDraft(activeRoomId.value, result.sourceAssistantMessageId, null)
       }
       if (
+        actionType === 'supply.request'
+        && result?.sourceAssistantMessageId
+        && Array.isArray(result?.supplyItems)
+      ) {
+        chatStore.setMessageSupplyItems(
+          activeRoomId.value,
+          result.sourceAssistantMessageId,
+          result.supplyItems,
+        )
+        chatStore.setMessageSupplyItemActionResult(
+          activeRoomId.value,
+          result.sourceAssistantMessageId,
+          result.supplyItemActionResult || null,
+        )
+      }
+      if (
         (actionType === 'supply.update' || actionType === 'supply.cancel')
         && result?.sourceAssistantMessageId
         && Array.isArray(result?.supplyRequests)
@@ -1524,6 +1540,7 @@ onBeforeUnmount(() => {
                 :loading-item-id="preparingSupplyRequestId"
                 :actions-enabled="Boolean(message.messageId)"
                 :action-draft="message.actionDraft"
+                :action-result="message.supplyItemActionResult"
                 @request="(item) => prepareSupplyRequestFromItem(message, item)"
               />
 
@@ -1657,8 +1674,8 @@ onBeforeUnmount(() => {
   margin: 0;
   min-height: 0;
   display: flex;
-  gap: 20px;
-  padding: 0 24px 0 0;
+  gap: 0;
+  padding: 0;
 }
 
 .chat-main {
@@ -2479,8 +2496,8 @@ onBeforeUnmount(() => {
   }
 
   .chat-body {
-    padding: 0 14px 0 0;
-    gap: 14px;
+    padding: 0;
+    gap: 0;
   }
 
   .welcome-area {
@@ -2556,7 +2573,7 @@ onBeforeUnmount(() => {
     padding: 15px 14px;
   }
   .chat-body {
-    padding: 0 10px;
+    padding: 0;
     gap: 0;
   }
 
