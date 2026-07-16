@@ -267,6 +267,7 @@ const normalizeMessage = (message) => {
     content,
     tag: message.tag || null,
     agentActivity: message.agentActivity || null,
+    actionDraft: message.actionDraft || message.action_draft || null,
     createdAt,
     time: formatKoreanTime(createdAt),
     isLocal: false,
@@ -744,6 +745,32 @@ export const useChatStore = defineStore('chat', {
       }
     },
 
+    updateActionDraft(actionDraft) {
+      const draftId = actionDraft?.draftId || actionDraft?.draft_id
+      if (!draftId) return
+
+      const updated = {}
+      Object.entries(this.messagesByConversationId).forEach(([key, messages]) => {
+        updated[key] = (messages || []).map((message) => {
+          const currentDraftId = message.actionDraft?.draftId || message.actionDraft?.draft_id
+          return String(currentDraftId || '') === String(draftId)
+            ? { ...message, actionDraft }
+            : message
+        })
+      })
+      this.messagesByConversationId = updated
+    },
+
+    async confirmActionDraft({ draftId, version, values }) {
+      const response = await chatApi.confirmActionDraft(
+        draftId,
+        version,
+        values,
+      )
+      this.updateActionDraft(response.data)
+      return response.data
+    },
+
     removeLocalMessage(conversationId, localMessageId) {
       const key = String(conversationId)
       const currentMessages = this.messagesByConversationId[key] || []
@@ -893,6 +920,20 @@ export const useChatStore = defineStore('chat', {
               refreshTargets.add(target)
             })
 
+            if (parsed.event === 'final_revision') {
+              const content = parsed.data?.content
+              if (content) {
+                hasReceivedFirstChunk = true
+                agentActivity = completeAgentActivity(agentActivity)
+                this.patchLocalMessage(conversationId, localAssistantMessageId, {
+                  text: content,
+                  content,
+                  isLoading: false,
+                  agentActivity,
+                })
+              }
+              return
+            }
             const statusText = getStatusText(parsed)
             if (!statusText) {
               if (DEBUG_CHAT_SSE) {

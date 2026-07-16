@@ -4,4 +4,9 @@ export const workhubApi = {
   getSidebarSummary() {
     return apiClient.get('/api/v1/workhub/sidebar-summary')
   },
+  getMeetingRooms(date) {
+    return apiClient.get('/api/v1/workhub/meeting-rooms', {
+      params: date ? { date } : undefined,
+    })
+  },
 }

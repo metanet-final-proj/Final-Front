@@ -17,6 +17,7 @@ import AdminDashboardPanel from '../components/admin/AdminDashboardPanel.vue'
 import ChatSidebar from '../components/chat/ChatSidebar.vue'
 import WorkhubDetailPanel from '../components/chat/WorkhubDetailPanel.vue'
 import MyPagePanel from '../components/mypage/MyPagePanel.vue'
+import ActionDraftCard from '../components/chat/ActionDraftCard.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -73,6 +74,10 @@ const MAIN_PANEL = {
 const ADMIN_DASHBOARD_PERMISSION = 'observability.dashboard.read'
 
 const PANEL_QUERY_VALUES = new Set(Object.values(MAIN_PANEL))
+const PANEL_ROUTE_NAMES = {
+  [MAIN_PANEL.MYPAGE]: 'mypage',
+  [MAIN_PANEL.ADMIN]: 'admin-dashboard',
+}
 
 const getPanelFromQuery = (panelQuery) => {
   const rawPanel = Array.isArray(panelQuery) ? panelQuery[0] : panelQuery
@@ -81,39 +86,52 @@ const getPanelFromQuery = (panelQuery) => {
   return PANEL_QUERY_VALUES.has(normalizedPanel) ? normalizedPanel : MAIN_PANEL.CHAT
 }
 
-const replacePanelQuery = async (panel) => {
-  const nextQuery = { ...route.query }
-
-  if (panel === MAIN_PANEL.CHAT) {
-    delete nextQuery.panel
-  } else {
-    nextQuery.panel = panel
+const getPanelFromRoute = (currentRoute) => {
+  if (currentRoute.name === PANEL_ROUTE_NAMES[MAIN_PANEL.MYPAGE]) {
+    return MAIN_PANEL.MYPAGE
   }
 
-  const currentPanel = getPanelFromQuery(route.query.panel)
+  if (currentRoute.name === PANEL_ROUTE_NAMES[MAIN_PANEL.ADMIN]) {
+    return MAIN_PANEL.ADMIN
+  }
+
+  // Preserve old shared links that still use ?panel during the transition.
+  return getPanelFromQuery(currentRoute.query.panel)
+}
+
+const replacePanelQuery = async (panel) => {
+  const currentPanel = getPanelFromRoute(route)
   if (currentPanel === panel) return
 
+  if (panel !== MAIN_PANEL.CHAT) {
+    await router.replace({ name: PANEL_ROUTE_NAMES[panel] })
+    return
+  }
+
   await router.replace({
-    path: '/chat',
-    query: nextQuery,
+    name: 'chat',
+    params: route.params.conversationId
+      ? { conversationId: route.params.conversationId }
+      : {},
+    query: {},
   })
 }
 
 const pushPanelQuery = async (panel) => {
-  const nextQuery = { ...route.query }
-
-  if (panel === MAIN_PANEL.CHAT) {
-    delete nextQuery.panel
-  } else {
-    nextQuery.panel = panel
-  }
-
-  const currentPanel = getPanelFromQuery(route.query.panel)
+  const currentPanel = getPanelFromRoute(route)
   if (currentPanel === panel) return
 
+  if (panel !== MAIN_PANEL.CHAT) {
+    await router.push({ name: PANEL_ROUTE_NAMES[panel] })
+    return
+  }
+
   await router.push({
-    path: '/chat',
-    query: nextQuery,
+    name: 'chat',
+    params: route.params.conversationId
+      ? { conversationId: route.params.conversationId }
+      : {},
+    query: {},
   })
 }
 
@@ -125,6 +143,8 @@ const composerInputRef = ref(null)
 const chatSidebarRef = ref(null)
 const logoutLoading = ref(false)
 const businessActionLoading = ref(false)
+const confirmingActionDraftId = ref(null)
+const actionDraftErrors = ref({})
 const composingNewChat = ref(true)
 const isDarkMode = ref(getInitialDarkMode())
 const isRecording = ref(false)
@@ -134,11 +154,16 @@ const isVoiceSupported = typeof window !== 'undefined' &&
   typeof window.MediaRecorder !== 'undefined'
 
 const skipNextMessageScroll = ref(false)
+const autoFollowThread = ref(true)
+const chatDataReady = ref(false)
+
+const THREAD_BOTTOM_THRESHOLD_PX = 72
 
 let mediaRecorder = null
 let mediaStream = null
 let audioChunks = []
 let recordingTimer = null
+let lastThreadScrollTop = 0
 
 const resizeComposer = async () => {
   await nextTick()
@@ -359,12 +384,35 @@ const nowTime = () => {
   return `${period} ${String(displayHour).padStart(2, '0')}:${minute}`
 }
 
-const scrollThread = async () => {
+const isThreadNearBottom = () => {
+  const thread = threadRef.value
+  if (!thread) return true
+
+  return thread.scrollHeight - thread.scrollTop - thread.clientHeight <= THREAD_BOTTOM_THRESHOLD_PX
+}
+
+const handleThreadScroll = () => {
+  const thread = threadRef.value
+  if (!thread) return
+
+  const scrollTopChanged = Math.abs(thread.scrollTop - lastThreadScrollTop) > 1
+  lastThreadScrollTop = thread.scrollTop
+
+  // Streaming can change the scroll container's height and emit a scroll event
+  // without any user movement. Only release auto-follow when the position moved.
+  if (!scrollTopChanged) return
+
+  autoFollowThread.value = isThreadNearBottom()
+}
+
+const scrollThread = async ({ force = false } = {}) => {
   await nextTick()
 
-  if (threadRef.value) {
-    threadRef.value.scrollTop = threadRef.value.scrollHeight
-  }
+  if (!threadRef.value || (!force && !autoFollowThread.value)) return
+
+  threadRef.value.scrollTop = threadRef.value.scrollHeight
+  lastThreadScrollTop = threadRef.value.scrollTop
+  autoFollowThread.value = true
 }
 
 const fillDraftFromStarter = async (query) => {
@@ -496,7 +544,7 @@ const toggleVoiceRecording = () => {
 let scrollAnimationFrameId = null
 
 const requestScrollThread = () => {
-  if (scrollAnimationFrameId) return
+  if (scrollAnimationFrameId || !autoFollowThread.value) return
 
   scrollAnimationFrameId = window.requestAnimationFrame(async () => {
     scrollAnimationFrameId = null
@@ -504,18 +552,39 @@ const requestScrollThread = () => {
   })
 }
 
-const selectRoom = async (roomId) => {
+const conversationRouteLocation = (conversationId = null, query = route.query) => ({
+  name: 'chat',
+  params: conversationId ? { conversationId: String(conversationId) } : {},
+  query,
+})
+
+const activateConversation = async (roomId) => {
+  const conversation = chatStore.conversations.find(
+    (item) => normalizeId(item.conversationId) === normalizeId(roomId),
+  )
+
+  if (!conversation) return false
+
   mainPanel.value = MAIN_PANEL.CHAT
-  await replacePanelQuery(MAIN_PANEL.CHAT)
   composingNewChat.value = false
-  chatStore.setActiveConversation(roomId)
+  autoFollowThread.value = true
+  chatStore.setActiveConversation(conversation.conversationId)
 
   try {
-    await chatStore.fetchMessages(roomId)
-    await scrollThread()
+    await chatStore.fetchMessages(conversation.conversationId)
+    await scrollThread({ force: true })
+    return true
   } catch (error) {
     console.error('Failed to fetch chat messages:', error)
+    return false
   }
+}
+
+const selectRoom = async (roomId) => {
+  const nextQuery = { ...route.query }
+  delete nextQuery.panel
+
+  await router.push(conversationRouteLocation(roomId, nextQuery))
 }
 
 const ensureActiveConversation = async (initialMessage = '') => {
@@ -547,6 +616,9 @@ const sendMessage = async (text = draft.value) => {
   }
 
   if (!conversationId) return
+
+  autoFollowThread.value = true
+  await scrollThread({ force: true })
 
   const currentRoomTitle = activeRoom.value?.title
 
@@ -592,11 +664,15 @@ const handleComposerKeydown = (event) => {
 
 const createNewChat = async (initialTitle = '') => {
   mainPanel.value = MAIN_PANEL.CHAT
-  await replacePanelQuery(MAIN_PANEL.CHAT)
   const titleText = typeof initialTitle === 'string' ? initialTitle.trim() : ''
 
   if (!titleText) {
+    const nextQuery = { ...route.query }
+    delete nextQuery.panel
+    await router.push(conversationRouteLocation(null, nextQuery))
+
     composingNewChat.value = true
+    autoFollowThread.value = true
     chatStore.setActiveConversation(null)
     panelKey.value = null
     draft.value = ''
@@ -630,8 +706,10 @@ const createNewChat = async (initialTitle = '') => {
 
     if (conversationId) {
       composingNewChat.value = false
+      autoFollowThread.value = true
       chatStore.setActiveConversation(conversationId)
       resetMessagesForConversation(conversationId)
+      await router.replace(conversationRouteLocation(conversationId, {}))
     } else {
       console.warn('Created conversation id was not found:', conversation)
     }
@@ -645,7 +723,7 @@ const createNewChat = async (initialTitle = '') => {
       composerInputRef.value.focus()
     }
 
-    await scrollThread()
+    await scrollThread({ force: true })
 
     return conversationId
   } catch (error) {
@@ -656,7 +734,16 @@ const createNewChat = async (initialTitle = '') => {
 
 const handleRoomDeleted = async () => {
   draft.value = ''
-  await scrollThread()
+
+  const nextConversationId = activeRoomId.value
+  if (nextConversationId) {
+    await router.replace(conversationRouteLocation(nextConversationId, {}))
+    await activateConversation(nextConversationId)
+    return
+  }
+
+  composingNewChat.value = true
+  await router.replace(conversationRouteLocation(null, {}))
 }
 
 const togglePanel = (key) => {
@@ -678,6 +765,34 @@ const refreshWorkhubSidebar = async () => {
     await workhubStore.fetchSidebarSummary()
   } catch (error) {
     console.error('Failed to refresh Workhub sidebar summary:', error)
+  }
+}
+
+const confirmActionDraft = async (payload) => {
+  if (!payload?.draftId || confirmingActionDraftId.value) return
+
+  confirmingActionDraftId.value = payload.draftId
+  actionDraftErrors.value = {
+    ...actionDraftErrors.value,
+    [payload.draftId]: '',
+  }
+
+  try {
+    const result = await chatStore.confirmActionDraft(payload)
+    if (String(result?.status || '').toUpperCase() === 'COMPLETED') {
+      await refreshWorkhubSidebar()
+    }
+  } catch (error) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error?.message ||
+      '회의실 예약에 실패했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.'
+    actionDraftErrors.value = {
+      ...actionDraftErrors.value,
+      [payload.draftId]: message,
+    }
+  } finally {
+    confirmingActionDraftId.value = null
   }
 }
 
@@ -704,10 +819,9 @@ const toggleDarkMode = () => {
   isDarkMode.value = !isDarkMode.value
 }
 
-const openMyPage = () => {
-  mainPanel.value = MAIN_PANEL.MYPAGE
+const openMyPage = async () => {
   panelKey.value = null
-  pushPanelQuery(MAIN_PANEL.MYPAGE)
+  await pushPanelQuery(MAIN_PANEL.MYPAGE)
 }
 
 const openAdminDashboard = async () => {
@@ -718,7 +832,6 @@ const openAdminDashboard = async () => {
     return
   }
 
-  mainPanel.value = MAIN_PANEL.ADMIN
   panelKey.value = null
   await pushPanelQuery(MAIN_PANEL.ADMIN)
 }
@@ -752,14 +865,45 @@ watch(
   },
 )
 
+watch(
+  () => [route.params.conversationId, route.name, route.query.panel],
+  async ([conversationId]) => {
+    if (
+      !chatDataReady.value ||
+      getPanelFromRoute(route) !== MAIN_PANEL.CHAT
+    ) return
+
+    if (!conversationId) {
+      composingNewChat.value = true
+      autoFollowThread.value = true
+      chatStore.setActiveConversation(null)
+      return
+    }
+
+    if (
+      !composingNewChat.value &&
+      normalizeId(activeRoomId.value) === normalizeId(conversationId)
+    ) {
+      return
+    }
+
+    const activated = await activateConversation(conversationId)
+    if (!activated) {
+      composingNewChat.value = true
+      chatStore.setActiveConversation(null)
+      await router.replace(conversationRouteLocation(null, {}))
+    }
+  },
+)
+
 watch(isDarkMode, (nextValue) => {
   applyTheme(nextValue)
 })
 
 watch(
-  () => [route.query.panel, canAccessAdminDashboard.value],
-  async ([panelQuery]) => {
-    const nextPanel = getPanelFromQuery(panelQuery)
+  () => [route.name, route.query.panel, canAccessAdminDashboard.value],
+  async () => {
+    const nextPanel = getPanelFromRoute(route)
 
     if (nextPanel === MAIN_PANEL.ADMIN && !canAccessAdminDashboard.value) {
       mainPanel.value = MAIN_PANEL.CHAT
@@ -789,10 +933,23 @@ onMounted(async () => {
   try {
     await chatStore.fetchConversations()
     refreshWorkhubSidebar()
-    composingNewChat.value = true
-    chatStore.setActiveConversation(null)
 
-    await scrollThread()
+    const routeConversationId = route.params.conversationId
+    if (routeConversationId) {
+      const activated = await activateConversation(routeConversationId)
+
+      if (!activated) {
+        composingNewChat.value = true
+        chatStore.setActiveConversation(null)
+        await router.replace(conversationRouteLocation(null, {}))
+      }
+    } else {
+      composingNewChat.value = true
+      chatStore.setActiveConversation(null)
+    }
+
+    chatDataReady.value = true
+    await scrollThread({ force: true })
   } catch (error) {
     console.error('Failed to fetch chat data:', error)
 
@@ -998,7 +1155,7 @@ onBeforeUnmount(() => {
   </template>
 
   <template v-else>
-    <section ref="threadRef" class="thread-area">
+    <section ref="threadRef" class="thread-area" @scroll.passive="handleThreadScroll">
       <div v-if="chatStore.messagesLoading" class="message-loading">
         이전 메시지를 불러오는 중입니다.
       </div>
@@ -1108,10 +1265,22 @@ onBeforeUnmount(() => {
 
             <div
               v-if="!message.agentActivity || !message.isLoading"
-              class="assistant-bubble markdown-content"
+              class="assistant-bubble"
               :class="{ 'loading-answer': message.isLoading && !message.agentActivity }"
-              v-html="message.isLoading ? message.text : renderMarkdown(message.text)"
-            ></div>
+            >
+              <div
+                class="markdown-content"
+                v-html="message.isLoading ? message.text : renderMarkdown(message.text)"
+              ></div>
+
+              <ActionDraftCard
+                v-if="message.actionDraft"
+                :draft="message.actionDraft"
+                :loading="confirmingActionDraftId === message.actionDraft.draftId"
+                :external-error="actionDraftErrors[message.actionDraft.draftId] || ''"
+                @confirm="confirmActionDraft"
+              />
+            </div>
 
             <time>{{ message.time }}</time>
           </div>

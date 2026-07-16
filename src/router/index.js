@@ -28,8 +28,24 @@ const routes = [
     },
   },
   {
-    path: '/chat',
+    path: '/chat/:conversationId?',
     name: 'chat',
+    component: ChatView,
+    meta: {
+      requiresAuth: true,
+    },
+  },
+  {
+    path: '/mypage',
+    name: 'mypage',
+    component: ChatView,
+    meta: {
+      requiresAuth: true,
+    },
+  },
+  {
+    path: '/admin',
+    name: 'admin-dashboard',
     component: ChatView,
     meta: {
       requiresAuth: true,

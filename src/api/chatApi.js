@@ -191,6 +191,13 @@ export const chatApi = {
     return apiClient.get(`/api/v1/chat/conversations/${conversationId}/messages`)
   },
 
+  confirmActionDraft(draftId, version, values) {
+    return apiClient.post(
+      `/api/v1/chat/action-drafts/${draftId}/confirm`,
+      { version, values },
+    )
+  },
+
   async sendMessageStream(conversationId, message, handlers = {}, requestOptions = {}) {
     const baseUrl = getApiBaseUrl()
     const authStore = useAuthStore()
