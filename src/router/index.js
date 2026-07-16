@@ -35,6 +35,22 @@ const routes = [
       requiresAuth: true,
     },
   },
+  {
+    path: '/mypage',
+    name: 'mypage',
+    component: ChatView,
+    meta: {
+      requiresAuth: true,
+    },
+  },
+  {
+    path: '/admin',
+    name: 'admin-dashboard',
+    component: ChatView,
+    meta: {
+      requiresAuth: true,
+    },
+  },
 ]
 
 const router = createRouter({

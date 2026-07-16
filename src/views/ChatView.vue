@@ -74,6 +74,10 @@ const MAIN_PANEL = {
 const ADMIN_DASHBOARD_PERMISSION = 'observability.dashboard.read'
 
 const PANEL_QUERY_VALUES = new Set(Object.values(MAIN_PANEL))
+const PANEL_ROUTE_NAMES = {
+  [MAIN_PANEL.MYPAGE]: 'mypage',
+  [MAIN_PANEL.ADMIN]: 'admin-dashboard',
+}
 
 const getPanelFromQuery = (panelQuery) => {
   const rawPanel = Array.isArray(panelQuery) ? panelQuery[0] : panelQuery
@@ -82,45 +86,52 @@ const getPanelFromQuery = (panelQuery) => {
   return PANEL_QUERY_VALUES.has(normalizedPanel) ? normalizedPanel : MAIN_PANEL.CHAT
 }
 
-const replacePanelQuery = async (panel) => {
-  const nextQuery = { ...route.query }
-
-  if (panel === MAIN_PANEL.CHAT) {
-    delete nextQuery.panel
-  } else {
-    nextQuery.panel = panel
+const getPanelFromRoute = (currentRoute) => {
+  if (currentRoute.name === PANEL_ROUTE_NAMES[MAIN_PANEL.MYPAGE]) {
+    return MAIN_PANEL.MYPAGE
   }
 
-  const currentPanel = getPanelFromQuery(route.query.panel)
+  if (currentRoute.name === PANEL_ROUTE_NAMES[MAIN_PANEL.ADMIN]) {
+    return MAIN_PANEL.ADMIN
+  }
+
+  // Preserve old shared links that still use ?panel during the transition.
+  return getPanelFromQuery(currentRoute.query.panel)
+}
+
+const replacePanelQuery = async (panel) => {
+  const currentPanel = getPanelFromRoute(route)
   if (currentPanel === panel) return
+
+  if (panel !== MAIN_PANEL.CHAT) {
+    await router.replace({ name: PANEL_ROUTE_NAMES[panel] })
+    return
+  }
 
   await router.replace({
     name: 'chat',
     params: route.params.conversationId
       ? { conversationId: route.params.conversationId }
       : {},
-    query: nextQuery,
+    query: {},
   })
 }
 
 const pushPanelQuery = async (panel) => {
-  const nextQuery = { ...route.query }
-
-  if (panel === MAIN_PANEL.CHAT) {
-    delete nextQuery.panel
-  } else {
-    nextQuery.panel = panel
-  }
-
-  const currentPanel = getPanelFromQuery(route.query.panel)
+  const currentPanel = getPanelFromRoute(route)
   if (currentPanel === panel) return
+
+  if (panel !== MAIN_PANEL.CHAT) {
+    await router.push({ name: PANEL_ROUTE_NAMES[panel] })
+    return
+  }
 
   await router.push({
     name: 'chat',
     params: route.params.conversationId
       ? { conversationId: route.params.conversationId }
       : {},
-    query: nextQuery,
+    query: {},
   })
 }
 
@@ -152,6 +163,7 @@ let mediaRecorder = null
 let mediaStream = null
 let audioChunks = []
 let recordingTimer = null
+let lastThreadScrollTop = 0
 
 const resizeComposer = async () => {
   await nextTick()
@@ -380,6 +392,16 @@ const isThreadNearBottom = () => {
 }
 
 const handleThreadScroll = () => {
+  const thread = threadRef.value
+  if (!thread) return
+
+  const scrollTopChanged = Math.abs(thread.scrollTop - lastThreadScrollTop) > 1
+  lastThreadScrollTop = thread.scrollTop
+
+  // Streaming can change the scroll container's height and emit a scroll event
+  // without any user movement. Only release auto-follow when the position moved.
+  if (!scrollTopChanged) return
+
   autoFollowThread.value = isThreadNearBottom()
 }
 
@@ -389,6 +411,7 @@ const scrollThread = async ({ force = false } = {}) => {
   if (!threadRef.value || (!force && !autoFollowThread.value)) return
 
   threadRef.value.scrollTop = threadRef.value.scrollHeight
+  lastThreadScrollTop = threadRef.value.scrollTop
   autoFollowThread.value = true
 }
 
@@ -796,10 +819,9 @@ const toggleDarkMode = () => {
   isDarkMode.value = !isDarkMode.value
 }
 
-const openMyPage = () => {
-  mainPanel.value = MAIN_PANEL.MYPAGE
+const openMyPage = async () => {
   panelKey.value = null
-  pushPanelQuery(MAIN_PANEL.MYPAGE)
+  await pushPanelQuery(MAIN_PANEL.MYPAGE)
 }
 
 const openAdminDashboard = async () => {
@@ -810,7 +832,6 @@ const openAdminDashboard = async () => {
     return
   }
 
-  mainPanel.value = MAIN_PANEL.ADMIN
   panelKey.value = null
   await pushPanelQuery(MAIN_PANEL.ADMIN)
 }
@@ -845,11 +866,11 @@ watch(
 )
 
 watch(
-  () => [route.params.conversationId, route.query.panel],
-  async ([conversationId, panelQuery]) => {
+  () => [route.params.conversationId, route.name, route.query.panel],
+  async ([conversationId]) => {
     if (
       !chatDataReady.value ||
-      getPanelFromQuery(panelQuery) !== MAIN_PANEL.CHAT
+      getPanelFromRoute(route) !== MAIN_PANEL.CHAT
     ) return
 
     if (!conversationId) {
@@ -880,9 +901,9 @@ watch(isDarkMode, (nextValue) => {
 })
 
 watch(
-  () => [route.query.panel, canAccessAdminDashboard.value],
-  async ([panelQuery]) => {
-    const nextPanel = getPanelFromQuery(panelQuery)
+  () => [route.name, route.query.panel, canAccessAdminDashboard.value],
+  async () => {
+    const nextPanel = getPanelFromRoute(route)
 
     if (nextPanel === MAIN_PANEL.ADMIN && !canAccessAdminDashboard.value) {
       mainPanel.value = MAIN_PANEL.CHAT

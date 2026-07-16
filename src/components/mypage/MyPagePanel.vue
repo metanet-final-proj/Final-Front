@@ -92,6 +92,24 @@ const chartOptions = {
   },
 }
 
+const requestChartOptions = {
+  ...chartOptions,
+  layout: {
+    padding: {
+      left: 14,
+      right: 14,
+    },
+  },
+  scales: {
+    ...chartOptions.scales,
+    x: {
+      ...chartOptions.scales.x,
+      // Keep the first and last bars inside the plot area.
+      offset: true,
+    },
+  },
+}
+
 const destroyCharts = () => {
   tokenChart?.destroy()
   requestChart?.destroy()
@@ -141,7 +159,7 @@ const renderCharts = async () => {
         },
       ],
     },
-    options: chartOptions,
+    options: requestChartOptions,
   })
 }
 

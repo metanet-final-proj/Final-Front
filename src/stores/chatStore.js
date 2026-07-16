@@ -920,6 +920,20 @@ export const useChatStore = defineStore('chat', {
               refreshTargets.add(target)
             })
 
+            if (parsed.event === 'final_revision') {
+              const content = parsed.data?.content
+              if (content) {
+                hasReceivedFirstChunk = true
+                agentActivity = completeAgentActivity(agentActivity)
+                this.patchLocalMessage(conversationId, localAssistantMessageId, {
+                  text: content,
+                  content,
+                  isLoading: false,
+                  agentActivity,
+                })
+              }
+              return
+            }
             const statusText = getStatusText(parsed)
             if (!statusText) {
               if (DEBUG_CHAT_SSE) {
