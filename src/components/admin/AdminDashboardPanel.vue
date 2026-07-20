@@ -12,7 +12,9 @@ const ranges = [
 ]
 const selectedRange = ref(ranges[0].value)
 const dashboard = ref(null)
+const monthlySummary = ref(null)
 const isLoading = ref(false)
+const summaryLoading = ref(true)
 const errorMessage = ref('')
 const organizationDialogOpen = ref(false)
 const organizationButtonRef = ref(null)
@@ -27,7 +29,7 @@ const closeOrganizationDialog = async () => {
   organizationButtonRef.value?.focus()
 }
 
-const summary = computed(() => dashboard.value?.summary ?? {
+const summary = computed(() => monthlySummary.value ?? {
   totalRequests: 0,
   totalRequestsDeltaPercent: 0,
   answerSuccessRate: 0,
@@ -158,10 +160,15 @@ const ragDocumentsCanvas = ref(null)
 const signupCanvas = ref(null)
 
 const charts = []
+const chartAnimationFrameIds = new Set()
 
 const baseChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
+  animation: {
+    duration: 1000,
+    easing: 'easeOutQuart',
+  },
   plugins: {
     legend: {
       display: false,
@@ -290,10 +297,50 @@ const stackedBarChartOptions = {
 const createChart = (canvas, config) => {
   if (!canvas.value) return
 
-  charts.push(new Chart(canvas.value, config))
+  const finalDatasets = config.data.datasets.map((dataset) => ({
+    ...dataset,
+    data: [...dataset.data],
+  }))
+  const initialDatasets = finalDatasets.map((dataset) => ({
+    ...dataset,
+    data: dataset.data.map(() => 0),
+  }))
+  const chart = new Chart(canvas.value, {
+    ...config,
+    data: {
+      ...config.data,
+      datasets: initialDatasets,
+    },
+  })
+
+  charts.push(chart)
+
+  let firstFrameId = null
+  let secondFrameId = null
+
+  firstFrameId = window.requestAnimationFrame(() => {
+    chartAnimationFrameIds.delete(firstFrameId)
+
+    secondFrameId = window.requestAnimationFrame(() => {
+      chartAnimationFrameIds.delete(secondFrameId)
+      if (!charts.includes(chart)) return
+
+      chart.data.datasets.forEach((dataset, index) => {
+        dataset.data = [...finalDatasets[index].data]
+      })
+      chart.update()
+    })
+    chartAnimationFrameIds.add(secondFrameId)
+  })
+  chartAnimationFrameIds.add(firstFrameId)
 }
 
 const destroyCharts = () => {
+  chartAnimationFrameIds.forEach((frameId) => {
+    window.cancelAnimationFrame(frameId)
+  })
+  chartAnimationFrameIds.clear()
+
   while (charts.length > 0) {
     charts.pop()?.destroy()
   }
@@ -374,7 +421,7 @@ const renderCharts = () => {
         },
       ],
     },
-    options: baseChartOptions,
+    options: paddedBarChartOptions,
   })
 
   createChart(toolUsageCanvas, {
@@ -487,12 +534,22 @@ const renderCharts = () => {
 }
 
 const fetchDashboard = async () => {
+  const isInitialLoad = dashboard.value === null
   isLoading.value = true
+  if (isInitialLoad) {
+    summaryLoading.value = true
+  }
   errorMessage.value = ''
 
   try {
     const response = await adminObservabilityApi.getDashboard(selectedRange.value)
     dashboard.value = response.data
+    if (monthlySummary.value === null) {
+      monthlySummary.value = response.data?.summary ?? null
+    }
+
+    isLoading.value = false
+    summaryLoading.value = false
     await nextTick()
     renderCharts()
   } catch (error) {
@@ -500,6 +557,9 @@ const fetchDashboard = async () => {
     errorMessage.value = '관리자 대시보드를 불러오지 못했습니다.'
   } finally {
     isLoading.value = false
+    if (isInitialLoad) {
+      summaryLoading.value = false
+    }
   }
 }
 
@@ -585,7 +645,10 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="admin-dashboard-panel" aria-labelledby="admin-dashboard-title">
-    <div class="admin-dashboard-grid">
+    <div
+      class="admin-dashboard-grid"
+      :aria-busy="isLoading"
+    >
       <header class="admin-heading">
         <div>
           <p>Admin</p>
@@ -606,13 +669,12 @@ onBeforeUnmount(() => {
       <section class="admin-kpi-card" aria-label="관리자 KPI">
         <article v-for="kpi in kpis" :key="kpi.label">
           <span>{{ kpi.label }}</span>
-          <strong>{{ kpi.value }}</strong>
-          <small>{{ kpi.delta }}</small>
+          <strong>{{ summaryLoading ? '...' : kpi.value }}</strong>
+          <small>{{ summaryLoading ? '' : kpi.delta }}</small>
         </article>
       </section>
 
       <p v-if="errorMessage" class="dashboard-error">{{ errorMessage }}</p>
-      <p v-else-if="isLoading" class="dashboard-loading">대시보드를 불러오는 중입니다.</p>
 
       <div class="range-toggle" aria-label="차트 기간 선택">
         <span>기간</span>
@@ -640,6 +702,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="chart-area">
           <canvas ref="tokenTrendCanvas" aria-label="토큰 사용량 그래프"></canvas>
+          <div v-if="isLoading" class="chart-placeholder">불러오는 중...</div>
         </div>
       </article>
 
@@ -652,6 +715,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="chart-area">
           <canvas ref="domainTokenCanvas" aria-label="도메인별 요청당 평균 토큰 차트"></canvas>
+          <div v-if="isLoading" class="chart-placeholder">불러오는 중...</div>
         </div>
       </article>
 
@@ -664,6 +728,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="chart-area">
           <canvas ref="requestCanvas" aria-label="전체 요청량 그래프"></canvas>
+          <div v-if="isLoading" class="chart-placeholder">불러오는 중...</div>
         </div>
       </article>
 
@@ -676,6 +741,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="chart-area">
           <canvas ref="toolUsageCanvas" aria-label="도메인별 툴 호출 횟수 차트"></canvas>
+          <div v-if="isLoading" class="chart-placeholder">불러오는 중...</div>
         </div>
       </article>
 
@@ -689,23 +755,24 @@ onBeforeUnmount(() => {
         <dl class="rag-summary-grid">
           <div>
             <dt>전체 검색 수</dt>
-            <dd>{{ formatNumber(ragSummary.totalSearches) }}</dd>
+            <dd>{{ isLoading ? '...' : formatNumber(ragSummary.totalSearches) }}</dd>
           </div>
           <div>
             <dt>검색 결과 확보율</dt>
-            <dd>{{ formatPercent(ragSummary.resultFoundRate) }}%</dd>
+            <dd>{{ isLoading ? '...' : `${formatPercent(ragSummary.resultFoundRate)}%` }}</dd>
           </div>
           <div>
             <dt>평균 Top 1 유사도</dt>
-            <dd>{{ Number(ragSummary.avgTop1Similarity ?? 0).toFixed(3) }}</dd>
+            <dd>{{ isLoading ? '...' : Number(ragSummary.avgTop1Similarity ?? 0).toFixed(3) }}</dd>
           </div>
           <div>
             <dt>P95 검색 지연</dt>
-            <dd>{{ formatNumber(ragSummary.p95LatencyMs) }} ms</dd>
+            <dd>{{ isLoading ? '...' : `${formatNumber(ragSummary.p95LatencyMs)} ms` }}</dd>
           </div>
         </dl>
         <div class="chart-area rag-chart-area">
           <canvas ref="ragStatusCanvas" aria-label="RAG 검색 상태 추이 차트"></canvas>
+          <div v-if="isLoading" class="chart-placeholder">불러오는 중...</div>
         </div>
       </article>
 
@@ -718,6 +785,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="chart-area">
           <canvas ref="ragDocumentsCanvas" aria-label="검색 결과 노출 문서 TOP 5 차트"></canvas>
+          <div v-if="isLoading" class="chart-placeholder">불러오는 중...</div>
         </div>
       </article>
 
@@ -730,6 +798,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="chart-area">
           <canvas ref="signupCanvas" aria-label="로그인 사용자 추이 그래프"></canvas>
+          <div v-if="isLoading" class="chart-placeholder">불러오는 중...</div>
         </div>
       </article>
 
@@ -982,8 +1051,7 @@ onBeforeUnmount(() => {
   line-height: 1.3;
 }
 
-.dashboard-error,
-.dashboard-loading {
+.dashboard-error {
   grid-column: 1 / 11;
   margin: 0;
   border: 1px solid var(--color-border-light);
@@ -1132,6 +1200,18 @@ onBeforeUnmount(() => {
 .chart-area canvas {
   width: 100%;
   height: 100%;
+}
+
+.chart-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-subtle);
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(var(--color-white-rgb), 0.62);
 }
 
 .rag-summary-grid {
@@ -1480,4 +1560,5 @@ onBeforeUnmount(() => {
     width: 100%;
   }
 }
+
 </style>
