@@ -9,4 +9,10 @@ export const workhubApi = {
       params: date ? { date } : undefined,
     })
   },
+  getParkingLots() {
+    return apiClient.get('/api/v1/workhub/parking-lots')
+  },
+  getSupplyItems() {
+    return apiClient.get('/api/v1/workhub/supply-items')
+  },
 }
