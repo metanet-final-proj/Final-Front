@@ -861,13 +861,23 @@ const confirmActionDraft = async (payload) => {
       await refreshWorkhubSidebar()
     }
   } catch (error) {
+    const status = Number(error.response?.status || error.status || 0)
+    const code =
+      error.response?.data?.code ||
+      error.response?.data?.error?.code ||
+      ''
     const message =
       error.response?.data?.message ||
       error.response?.data?.error?.message ||
       '요청 처리에 실패했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.'
     actionDraftErrors.value = {
       ...actionDraftErrors.value,
-      [payload.draftId]: message,
+      [payload.draftId]: {
+        message,
+        status,
+        code,
+        tone: status === 409 ? 'rejected' : 'error',
+      },
     }
   } finally {
     confirmingActionDraftId.value = null
@@ -2595,6 +2605,6 @@ onBeforeUnmount(() => {
 
   .thread-area {
     padding: 16px 14px;
-  }
+                                             }
 }
 </style>

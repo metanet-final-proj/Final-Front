@@ -6,7 +6,7 @@ import ActionResultCallout from './ActionResultCallout.vue'
 const props = defineProps({
   draft: { type: Object, required: true },
   loading: { type: Boolean, default: false },
-  externalError: { type: String, default: '' },
+  externalError: { type: [String, Object], default: '' },
 })
 const emit = defineEmits(['confirm', 'dismiss'])
 
@@ -59,8 +59,14 @@ const canConfirm = computed(() => {
 })
 const completionPresentation = computed(() => props.draft?.presentation || null)
 const errorPresentation = computed(() => {
-  const message = props.externalError || props.draft?.errorMessage
-  return message ? { tone: 'error', title: message, fields: [] } : null
+  const externalMessage = typeof props.externalError === 'string'
+    ? props.externalError
+    : props.externalError?.message
+  const message = externalMessage || props.draft?.errorMessage
+  const tone = typeof props.externalError === 'object'
+    ? (props.externalError?.tone || 'error')
+    : 'error'
+  return message ? { tone, title: message, fields: [] } : null
 })
 
 function normalizeItem(item) {

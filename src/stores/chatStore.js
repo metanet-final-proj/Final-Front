@@ -24,6 +24,7 @@ const ASSISTANT_FAILURE_TEXT = '답변 생성에 실패했습니다. 잠시 후 
 const STAGE_LABELS = {
   planning: '요청을 분석하고 있어요...',
   summarizing: '지금까지의 대화를 요약하고 있어요...',
+  tool_selecting: '필요한 정보와 작업을 결정하고 있어요...',
   generating: '답변을 작성하고 있어요...',
 }
 
@@ -51,10 +52,11 @@ const getStatusText = (parsed) => {
 const AGENT_STAGE_TITLES = {
   planning: '요청을 분석하고 계획을 세우는 중',
   summarizing: '답변을 요약하는 중',
-  generating: '답변 생성을 준비하는 중',
+  tool_selecting: '필요한 정보와 작업을 결정하는 중',
+  generating: '결과를 바탕으로 답변을 작성하는 중',
 }
 
-const RUNNING_STATUS_STAGES = new Set(['summarizing', 'generating'])
+const RUNNING_STATUS_STAGES = new Set(['summarizing', 'tool_selecting', 'generating'])
 
 const createAgentActivity = (currentText = ASSISTANT_LOADING_TEXT) => ({
   currentText,
@@ -111,8 +113,10 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
 
   if (parsed.event === 'status') {
     const stage = data.stage || 'status'
+    const sequenceNo = data.sequenceNo ?? data.sequence_no ?? null
+    const stepSuffix = sequenceNo == null ? '' : `-${sequenceNo}`
     const nextStep = {
-      id: `status-${stage}`,
+      id: `status-${stage}${stepSuffix}`,
       type: 'status',
       title: data.message || AGENT_STAGE_TITLES[stage] || statusText,
       status: RUNNING_STATUS_STAGES.has(stage) ? 'running' : 'done',
@@ -166,8 +170,10 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
   if (parsed.event === 'progress') {
     const stage = data.stage || 'progress'
     const tool = data.tool || data.name || null
-    const isToolEnd = stage === 'tool_end'
-    const stepId = tool ? `tool-${tool}` : `progress-${stage}`
+    const isToolTerminal = stage === 'tool_end' || stage === 'tool_error'
+    const sequenceNo = data.sequenceNo ?? data.sequence_no ?? null
+    const stepSuffix = sequenceNo == null ? '' : `-${sequenceNo}`
+    const stepId = tool ? `tool-${tool}${stepSuffix}` : `progress-${stage}${stepSuffix}`
     const completedSteps = (baseActivity.steps || []).map((step) =>
       step.status === 'running' && step.id !== stepId
         ? {
@@ -189,7 +195,7 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
         type: tool ? 'tool' : 'progress',
         tool,
         title: statusText,
-        status: isToolEnd ? 'done' : 'running',
+        status: isToolTerminal ? 'done' : 'running',
       },
     )
   }

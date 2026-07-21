@@ -13,7 +13,7 @@ const props = defineProps({
     default: false,
   },
   externalError: {
-    type: String,
+    type: [String, Object],
     default: '',
   },
 })
@@ -231,8 +231,14 @@ const completionPresentation = computed(() => ({
     : (props.draft?.presentation?.fields || completionFields.value),
 }))
 const errorPresentation = computed(() => {
-  const message = props.externalError || props.draft?.errorMessage
-  return message ? { tone: 'error', title: message, fields: [] } : null
+  const externalMessage = typeof props.externalError === 'string'
+    ? props.externalError
+    : props.externalError?.message
+  const message = externalMessage || props.draft?.errorMessage
+  const tone = typeof props.externalError === 'object'
+    ? (props.externalError?.tone || 'error')
+    : 'error'
+  return message ? { tone, title: message, fields: [] } : null
 })
 
 const showCompletionImmediately = () => {
