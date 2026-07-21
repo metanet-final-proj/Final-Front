@@ -62,7 +62,12 @@ const isReservation = computed(() => actionType.value === 'meeting_room.reserve'
 const isUpdate = computed(() => actionType.value === 'meeting_room.update')
 const isCancellation = computed(() => actionType.value === 'meeting_room.cancel')
 const fromReservationList = computed(() => props.draft?.values?.origin === 'meeting_reservation_list')
-const showInlineTrigger = computed(() => !fromReservationList.value)
+const fromMeetingRoomQueryCard = computed(() => (
+  props.draft?.values?.origin === 'meeting_room_query_card'
+))
+const showInlineTrigger = computed(() => (
+  !fromReservationList.value && !fromMeetingRoomQueryCard.value
+))
 const actionLabel = computed(() => {
   if (isUpdate.value) return '회의실 예약 변경'
   if (isCancellation.value) return '회의실 예약 취소'
@@ -575,7 +580,7 @@ const confirm = () => {
 
 .action-modal footer { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
 .action-secondary,
-.action-primary { min-height: 38px; border-radius: 6px; padding: 0 15px; font-size: 12px; font-weight: 700; }
+.action-primary { min-height: 38px; border-radius: 6px; padding: 0 15px; font-size: 13px; font-weight: 700; }
 .action-secondary { border: 1px solid var(--color-border); background: transparent; color: var(--color-text); }
 .action-primary { border: 1px solid var(--color-primary); background: var(--color-primary); color: var(--color-white); }
 .action-primary:disabled { cursor: not-allowed; opacity: 0.5; }

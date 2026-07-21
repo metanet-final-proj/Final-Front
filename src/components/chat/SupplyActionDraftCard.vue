@@ -14,7 +14,15 @@ const isOpen = ref(false)
 const items = ref([])
 const itemsLoading = ref(false)
 const itemsError = ref('')
-const form = reactive({ requestId: '', itemId: '', itemName: '', category: '', quantity: 1, reason: '' })
+let nextRowId = 1
+const createItemRow = (values = {}) => ({
+  rowId: nextRowId++,
+  itemId: values.itemId ? String(values.itemId) : '',
+  itemName: values.itemName || '',
+  category: values.category || '',
+  quantity: Number(values.quantity || 1),
+})
+const form = reactive({ requestId: '', rows: [createItemRow()], reason: '' })
 
 const actionType = computed(() => String(props.draft?.actionType || 'supply.request'))
 const isCreate = computed(() => actionType.value === 'supply.request')
@@ -26,34 +34,26 @@ const executing = computed(() => status.value === 'EXECUTING' || props.loading)
 const origin = computed(() => String(props.draft?.values?.origin || ''))
 const fromList = computed(() => ['supply_item_list', 'supply_request_list'].includes(origin.value))
 const showInlineTrigger = computed(() => !fromList.value)
-const selectedItem = computed(() => items.value.find((item) => String(item.itemId) === String(form.itemId)))
 const originalItemId = computed(() => props.draft?.values?.itemId)
 const originalQuantity = computed(() => Number(props.draft?.values?.quantity || 0))
-const maxRequestQuantity = computed(() => {
-  if (isCancel.value || !selectedItem.value) return null
-  const currentStock = Number(selectedItem.value.stockQuantity || 0)
-  return isUpdate.value && String(selectedItem.value.itemId) === String(originalItemId.value)
-    ? currentStock + originalQuantity.value
-    : currentStock
-})
-const quantityExceedsStock = computed(() => (
-  maxRequestQuantity.value !== null && Number(form.quantity || 0) > maxRequestQuantity.value
-))
+const selectedItemIds = computed(() => form.rows.map((row) => String(row.itemId || '')).filter(Boolean))
 const actionLabel = computed(() => isUpdate.value ? '사무용품 신청 수정' : isCancel.value ? '사무용품 신청 취소' : '사무용품 신청')
 const confirmLabel = computed(() => isUpdate.value ? '수정하기' : isCancel.value ? '신청 취소하기' : '신청하기')
 const hasChanges = computed(() => {
   if (!isUpdate.value) return true
   const values = props.draft?.values || {}
-  return String(form.itemId || '') !== String(values.itemId || '')
-    || Number(form.quantity || 0) !== Number(values.quantity || 0)
+  const row = form.rows[0]
+  return String(row?.itemId || '') !== String(values.itemId || '')
+    || Number(row?.quantity || 0) !== Number(values.quantity || 0)
 })
 const canConfirm = computed(() => {
   if (executing.value) return false
   if (isCancel.value) return Boolean(form.requestId)
+  if (isCreate.value && (form.rows.length < 1 || form.rows.length > 5)) return false
+  const uniqueIds = new Set(selectedItemIds.value)
   return Boolean(
-    form.itemId
-      && Number(form.quantity) > 0
-      && !quantityExceedsStock.value
+    uniqueIds.size === form.rows.length
+      && form.rows.every((row) => row.itemId && Number(row.quantity) > 0 && !rowExceedsStock(row))
       && hasChanges.value,
   )
 })
@@ -116,13 +116,49 @@ function resolveItemByName(itemName) {
   if (ranked.length > 1 && ranked[0].score === ranked[1].score) return null
   return ranked[0].item
 }
+function selectedItemFor(row) {
+  return items.value.find((item) => String(item.itemId) === String(row?.itemId))
+}
+function maxRequestQuantityFor(row) {
+  if (isCancel.value) return null
+  const selectedItem = selectedItemFor(row)
+  if (!selectedItem) return null
+  const currentStock = Number(selectedItem.stockQuantity || 0)
+  return isUpdate.value && String(selectedItem.itemId) === String(originalItemId.value)
+    ? currentStock + originalQuantity.value
+    : currentStock
+}
+function rowExceedsStock(row) {
+  const maxQuantity = maxRequestQuantityFor(row)
+  return maxQuantity !== null && Number(row?.quantity || 0) > maxQuantity
+}
+function isItemOptionDisabled(item, rowIndex) {
+  if (item.status !== 'ACTIVE' || item.stockQuantity <= 0) return true
+  const currentItemId = String(form.rows[rowIndex]?.itemId || '')
+  return selectedItemIds.value.some(
+    (selectedId) => selectedId === String(item.itemId) && selectedId !== currentItemId,
+  )
+}
+function addItemRow() {
+  if (!isCreate.value || form.rows.length >= 5) return
+  form.rows.push(createItemRow())
+}
+function removeItemRow(index) {
+  if (!isCreate.value || form.rows.length <= 1) return
+  form.rows.splice(index, 1)
+}
 function syncForm() {
   const values = props.draft?.values || {}
   form.requestId = values.requestId ? String(values.requestId) : ''
-  form.itemId = values.itemId ? String(values.itemId) : ''
-  form.itemName = values.itemName || ''
-  form.category = values.category || ''
-  form.quantity = Number(values.quantity || 1)
+  const draftItems = isCreate.value && Array.isArray(values.items) && values.items.length
+    ? values.items.slice(0, 5)
+    : [{
+        itemId: values.itemId,
+        itemName: values.itemName,
+        category: values.category,
+        quantity: values.quantity,
+      }]
+  form.rows.splice(0, form.rows.length, ...draftItems.map(createItemRow))
   form.reason = values.reason || ''
 }
 async function loadItems() {
@@ -132,10 +168,13 @@ async function loadItems() {
   try {
     const response = await workhubApi.getSupplyItems()
     items.value = (Array.isArray(response?.data) ? response.data : []).map(normalizeItem)
-    if (!form.itemId && form.itemName) {
-      const matched = resolveItemByName(form.itemName)
-      if (matched) form.itemId = String(matched.itemId)
-    }
+    form.rows.forEach((row) => {
+      if (row.itemId || !row.itemName) return
+      const matched = resolveItemByName(row.itemName)
+      if (matched && !selectedItemIds.value.includes(String(matched.itemId))) {
+        row.itemId = String(matched.itemId)
+      }
+    })
   } catch (error) {
     console.error('Failed to load supply items:', error)
     itemsError.value = '사무용품 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
@@ -155,28 +194,33 @@ function closeForm() {
 }
 function confirm() {
   if (!canConfirm.value) return
-  const item = selectedItem.value
+  const normalizedItems = form.rows.map((row) => {
+    const item = selectedItemFor(row)
+    return {
+      itemId: row.itemId ? Number(row.itemId) : null,
+      itemName: item?.itemName || row.itemName || null,
+      category: item?.category || row.category || null,
+      quantity: Number(row.quantity || 0),
+    }
+  })
+  const firstItem = normalizedItems[0] || {}
   emit('confirm', {
     draftId: props.draft.draftId,
     version: props.draft.version,
     values: {
       ...(props.draft.values || {}),
       requestId: form.requestId ? Number(form.requestId) : null,
-      itemId: form.itemId ? Number(form.itemId) : null,
-      itemName: item?.itemName || form.itemName || null,
-      category: item?.category || form.category || null,
-      quantity: Number(form.quantity || 0),
+      itemId: isCreate.value ? null : firstItem.itemId,
+      itemName: isCreate.value ? null : firstItem.itemName,
+      category: isCreate.value ? null : firstItem.category,
+      quantity: isCreate.value ? null : firstItem.quantity,
+      items: isCreate.value ? normalizedItems : undefined,
       reason: form.reason.trim() || null,
     },
   })
 }
 
 watch(() => props.draft, syncForm, { immediate: true, deep: true })
-watch(selectedItem, (item) => {
-  if (!item) return
-  form.itemName = item.itemName
-  form.category = item.category
-})
 watch(completed, (value) => { if (value) isOpen.value = false }, { immediate: true })
 watch(() => props.draft?.draftId, () => {
   if (props.draft?.autoOpen && !completed.value) openForm()
@@ -200,42 +244,58 @@ watch(() => props.draft?.draftId, () => {
         </header>
 
         <div class="form-grid">
-          <label>
-            <span>사무용품</span>
-            <select v-if="!isCancel" v-model="form.itemId" :disabled="itemsLoading">
-              <option value="">{{ itemsLoading ? '불러오는 중...' : '품목을 선택해 주세요' }}</option>
-              <option
-                v-for="item in items"
-                :key="item.itemId"
-                :value="String(item.itemId)"
-                :disabled="item.status !== 'ACTIVE' || item.stockQuantity <= 0"
-              >{{ item.itemName }} · 재고 {{ item.stockQuantity }}개</option>
-            </select>
-            <input v-else :value="form.itemName || `품목 #${form.itemId}`" disabled />
-          </label>
-          <label>
-            <span>수량</span>
-            <input
-              v-model.number="form.quantity"
-              type="number"
-              min="1"
-              :max="maxRequestQuantity || undefined"
-              step="1"
-              :disabled="isCancel"
-            />
-            <small v-if="!isCancel && maxRequestQuantity !== null" class="stock-hint">
-              {{ isUpdate ? '수정 가능' : '신청 가능' }} 최대 {{ maxRequestQuantity }}개
-            </small>
-          </label>
+          <div class="item-list">
+            <div v-for="(row, rowIndex) in form.rows" :key="row.rowId" class="item-row">
+              <label>
+                <span>사무용품{{ isCreate && form.rows.length > 1 ? ` ${rowIndex + 1}` : '' }}</span>
+                <select v-if="!isCancel" v-model="row.itemId" :disabled="itemsLoading">
+                  <option value="">{{ itemsLoading ? '불러오는 중...' : '품목을 선택해 주세요' }}</option>
+                  <option
+                    v-for="item in items"
+                    :key="item.itemId"
+                    :value="String(item.itemId)"
+                    :disabled="isItemOptionDisabled(item, rowIndex)"
+                  >{{ item.itemName }} · 재고 {{ item.stockQuantity }}개</option>
+                </select>
+                <input v-else :value="row.itemName || `품목 #${row.itemId}`" disabled />
+              </label>
+              <label>
+                <span>수량</span>
+                <input
+                  v-model.number="row.quantity"
+                  type="number"
+                  min="1"
+                  :max="maxRequestQuantityFor(row) || undefined"
+                  step="1"
+                  :disabled="isCancel"
+                />
+              </label>
+              <button
+                v-if="isCreate && form.rows.length > 1"
+                type="button"
+                class="remove-item"
+                :aria-label="`${rowIndex + 1}번째 사무용품 삭제`"
+                :disabled="executing"
+                @click="removeItemRow(rowIndex)"
+              >삭제</button>
+              <p v-if="rowExceedsStock(row)" class="row-error">
+                선택한 품목의 현재 재고는 {{ maxRequestQuantityFor(row) }}개입니다.
+              </p>
+            </div>
+            <button
+              v-if="isCreate"
+              type="button"
+              class="add-item"
+              :disabled="executing || form.rows.length >= 5"
+              @click="addItemRow"
+            >+ 사무용품 추가 <span>{{ form.rows.length }}/5</span></button>
+          </div>
           <label class="wide">
             <span>신청 사유 <small>{{ isCreate ? '(선택)' : '(기존 신청 사유)' }}</small></span>
             <textarea v-model="form.reason" rows="3" :disabled="!isCreate" placeholder="사용 목적이나 필요한 이유를 입력해 주세요."></textarea>
           </label>
           <p v-if="itemsError" class="form-error">{{ itemsError }}</p>
           <p v-if="isUpdate && !hasChanges" class="form-note">품목이나 수량을 변경해야 수정할 수 있습니다.</p>
-          <p v-if="quantityExceedsStock" class="form-error">
-            신청 가능한 수량은 최대 {{ maxRequestQuantity }}개입니다.
-          </p>
           <ActionResultCallout v-if="errorPresentation" :presentation="errorPresentation" compact />
         </div>
 
@@ -257,22 +317,27 @@ watch(() => props.draft?.draftId, () => {
 .primary { border: 1px solid var(--color-primary); border-radius: 6px; background: var(--color-primary); color: var(--color-white); font-weight: 700; cursor: pointer; }
 button:disabled { cursor: default; opacity: .55; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .48); }
-.modal { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface-raised); box-shadow: 0 18px 50px rgba(15, 23, 42, .22); }
+.modal { width: min(680px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface-raised); box-shadow: 0 18px 50px rgba(15, 23, 42, .22); }
 .modal header { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 20px; border-bottom: 1px solid var(--color-border-light); }
 .modal header span { color: var(--color-primary); font-size: 11px; font-weight: 800; }
 .modal h2 { margin: 4px 0 0; font-size: 18px; }
 .close { border: 0; background: transparent; color: var(--color-subtle); font-size: 24px; cursor: pointer; }
 .form-grid { display: grid; grid-template-columns: 1fr 130px; gap: 14px; padding: 20px; }
+.item-list { grid-column: 1 / -1; display: grid; gap: 12px; }
+.item-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; align-items: end; gap: 12px; }
 label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
 label > span small { color: var(--color-subtle); font-weight: 500; }
-.stock-hint { color: var(--color-subtle); font-size: 11px; font-weight: 500; }
 .wide, .form-error, .form-note, .form-grid :deep(.action-result-callout) { grid-column: 1 / -1; }
 input, select, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--color-border); border-radius: 6px; padding: 9px 10px; background: var(--color-surface); color: var(--color-text); font: inherit; }
 textarea { resize: vertical; }
 .form-error { margin: 0; color: var(--color-danger); font-size: 12px; }
+.row-error { grid-column: 1 / -1; margin: -4px 0 0; color: var(--color-danger); font-size: 12px; }
 .form-note { margin: 0; color: var(--color-warning-text); font-size: 12px; }
+.add-item { justify-self: start; min-height: 34px; padding: 0 12px; border: 1px dashed var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-primary); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.add-item span { margin-left: 5px; color: var(--color-subtle); font-weight: 500; }
+.remove-item { min-height: 38px; padding: 0 11px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface-raised); color: var(--color-danger); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--color-border-light); }
-.modal footer button { min-height: 38px; padding: 0 15px; border-radius: 6px; font: inherit; font-weight: 700; }
+.modal footer button { min-height: 38px; padding: 0 15px; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 700; }
 .secondary { border: 1px solid var(--color-border); background: var(--color-surface-raised); color: var(--color-text); }
-@media (max-width: 520px) { .modal-backdrop { padding: 10px; } .form-grid { grid-template-columns: 1fr; padding: 16px; } .wide, .form-error, .form-note { grid-column: 1; } }
+@media (max-width: 620px) { .modal-backdrop { padding: 10px; } .form-grid { grid-template-columns: 1fr; padding: 16px; } .item-row { grid-template-columns: minmax(0, 1fr) 100px; } .remove-item { grid-column: 1 / -1; justify-self: end; min-height: 32px; } .wide, .form-error, .form-note { grid-column: 1; } }
 </style>

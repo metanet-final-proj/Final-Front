@@ -266,27 +266,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 6px;
   padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-scrollbar) transparent;
-}
-
-.room-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.room-list::-webkit-scrollbar-button {
-  display: none;
-  width: 0;
-  height: 0;
-}
-
-.room-list::-webkit-scrollbar-thumb {
-  background: var(--color-scrollbar);
-  border-radius: 999px;
-}
-
-.room-list::-webkit-scrollbar-track {
-  background: transparent;
 }
 
 .room-item {

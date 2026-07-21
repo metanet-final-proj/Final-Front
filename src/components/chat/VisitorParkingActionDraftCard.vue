@@ -300,7 +300,7 @@ watch(
 .parking-error { margin: 0; color: var(--color-danger); font-size: 12px; }
 .parking-notice { margin: 0; color: var(--color-subtle); font-size: 12px; }
 .parking-modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid var(--color-border-light); }
-.parking-modal footer button { min-height: 36px; padding: 8px 15px; border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer; }
+.parking-modal footer button { min-height: 36px; padding: 8px 15px; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .parking-modal footer .secondary { border: 1px solid var(--color-border); background: var(--color-surface-raised); color: var(--color-text); }
 .parking-modal footer .primary { border: 1px solid var(--color-primary); background: var(--color-primary); color: var(--color-white); }
 .parking-modal footer button:disabled { cursor: default; opacity: .55; }

@@ -69,7 +69,7 @@ test('chat URLs retain the conversation id for refresh restoration', () => {
 test('stream auto-follow pauses when the user scrolls away from the bottom', () => {
   assert.match(
     chatViewSource,
-    /const handleThreadScroll = \(\) => \{\s*autoFollowThread\.value = isThreadNearBottom\(\)/,
+    /const handleThreadScroll = \(\) => \{[\s\S]*?if \(!scrollTopChanged\) return[\s\S]*?autoFollowThread\.value = isThreadNearBottom\(\)/,
   )
   assert.match(
     chatViewSource,

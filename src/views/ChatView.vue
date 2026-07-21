@@ -168,6 +168,8 @@ const autoFollowThread = ref(true)
 const chatDataReady = ref(false)
 
 const THREAD_BOTTOM_THRESHOLD_PX = 72
+const COMPOSER_MAX_LINES = 3
+const SCROLL_HEIGHT_TOLERANCE_PX = 1
 
 let mediaRecorder = null
 let mediaStream = null
@@ -181,15 +183,35 @@ const resizeComposer = async () => {
   const textarea = composerInputRef.value
   if (!textarea) return
 
-  const maxHeight = 80
-
   textarea.style.height = 'auto'
-  textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`
-  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+
+  const styles = window.getComputedStyle(textarea)
+  const toPixels = (value) => Number.parseFloat(value) || 0
+  const lineHeight = toPixels(styles.lineHeight) || 22
+  const verticalPadding = toPixels(styles.paddingTop) + toPixels(styles.paddingBottom)
+  const verticalBorder = toPixels(styles.borderTopWidth) + toPixels(styles.borderBottomWidth)
+  const maxHeight = Math.ceil(
+    lineHeight * COMPOSER_MAX_LINES + verticalPadding + verticalBorder,
+  )
+  const contentHeight = textarea.scrollHeight + verticalBorder
+
+  textarea.style.height = `${Math.min(contentHeight, maxHeight)}px`
+  textarea.style.overflowY =
+    contentHeight > maxHeight + SCROLL_HEIGHT_TOLERANCE_PX ? 'auto' : 'hidden'
 }
 
 watch(
   draft,
+  () => {
+    resizeComposer()
+  },
+  {
+    flush: 'post',
+  },
+)
+
+watch(
+  composerInputRef,
   () => {
     resizeComposer()
   },
@@ -1805,7 +1827,7 @@ onBeforeUnmount(() => {
   line-height: 20px;
   padding: 6px 0 14px;
   resize: none;
-  overflow-y: auto;
+  overflow-y: hidden;
   box-sizing: border-box;
   font-family: inherit;
   appearance: none;
@@ -2381,7 +2403,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   height: 40px;
   min-height: 40px;
-  max-height: 80px;
+  max-height: 86px;
   border: none;
   outline: none;
   background: transparent;
@@ -2390,7 +2412,7 @@ onBeforeUnmount(() => {
   line-height: 22px;
   padding: 6px 0 14px;
   resize: none;
-  overflow-y: auto;
+  overflow-y: hidden;
   box-sizing: border-box;
   font-family: inherit;
   appearance: none;

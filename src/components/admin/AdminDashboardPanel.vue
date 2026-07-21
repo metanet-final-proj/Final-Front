@@ -10,7 +10,7 @@ const ranges = [
   { label: '14', value: '14d' },
   { label: '30', value: '30d' },
 ]
-const selectedRange = ref(ranges[0].value)
+const selectedRange = ref(ranges[1].value)
 const dashboard = ref(null)
 const monthlySummary = ref(null)
 const isLoading = ref(false)
@@ -621,6 +621,7 @@ const domainLabel = (domain) => {
     general: '기타',
     smalltalk: '기타',
     rag: 'RAG',
+    transcription: '음성 인식',
     unknown: '기타',
   }
 
@@ -698,6 +699,7 @@ onBeforeUnmount(() => {
           <div>
             <span>Token Usage</span>
             <h2>토큰 사용량</h2>
+            <small class="metric-note">GPT·Gemma4·Embedding·Reranker 처리량 합계</small>
           </div>
         </div>
         <div class="chart-area">
@@ -711,6 +713,7 @@ onBeforeUnmount(() => {
           <div>
             <span>Average Tokens by Domain</span>
             <h2>도메인별 요청당 평균 토큰</h2>
+            <small class="metric-note">동일 요청에서 발생한 모든 모델 처리량 기준</small>
           </div>
         </div>
         <div class="chart-area">
@@ -724,6 +727,7 @@ onBeforeUnmount(() => {
           <div>
             <span>Total Request</span>
             <h2>전체 요청량</h2>
+            <small class="metric-note">저장된 사용자 채팅 메시지 기준</small>
           </div>
         </div>
         <div class="chart-area">
@@ -1200,6 +1204,14 @@ onBeforeUnmount(() => {
 .chart-area canvas {
   width: 100%;
   height: 100%;
+}
+
+.metric-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-subtle);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .chart-placeholder {

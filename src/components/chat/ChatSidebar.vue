@@ -874,27 +874,6 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 14px 2px 0 0;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-scrollbar) transparent;
-}
-
-.sidebar-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.sidebar-content::-webkit-scrollbar-button {
-  display: none;
-  width: 0;
-  height: 0;
-}
-
-.sidebar-content::-webkit-scrollbar-thumb {
-  background: var(--color-scrollbar);
-  border-radius: 999px;
-}
-
-.sidebar-content::-webkit-scrollbar-track {
-  background: transparent;
 }
 
 .sidebar.collapsed .sidebar-content {
