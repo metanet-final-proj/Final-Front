@@ -328,7 +328,7 @@ onBeforeUnmount(() => {
                 <path fill="currentColor" d="m10.95 18l5.65-5.65l-1.45-1.45l-4.225 4.225l-2.1-2.1L7.4 14.45zM6 22q-.825 0-1.412-.587T4 20V4q0-.825.588-1.412T6 2h8l6 6v12q0 .825-.587 1.413T18 22zm7-13V4H6v16h12V9zM6 4v5zv16z" />
               </svg>
             </span>
-            오늘의 업무 바로가기
+            업무 바로가기
           </h2>
           <button
             class="side-refresh-button"
@@ -502,7 +502,6 @@ onBeforeUnmount(() => {
           업무 관련 문의는 자유롭게 질문해 주세요. 개인정보는 안전하게 보호되며,
           부적절한 요청은 처리되지 않을 수 있습니다.
         </p>
-        <button type="button">개인정보 처리방침 보기 ↗</button>
         <span>문의: 경영지원팀 02-1234-5678</span>
       </section>
     </template>
@@ -1340,16 +1339,6 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--color-text-secondary);
   line-height: 1.6;
-}
-
-.guide-card button {
-  margin-top: 9px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--color-primary-light);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .guide-card span {

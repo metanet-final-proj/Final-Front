@@ -34,6 +34,18 @@ const executing = computed(() => status.value === 'EXECUTING' || props.loading)
 const origin = computed(() => String(props.draft?.values?.origin || ''))
 const fromList = computed(() => ['supply_item_list', 'supply_request_list'].includes(origin.value))
 const showInlineTrigger = computed(() => !fromList.value)
+const quickExecutable = computed(() => (
+  isCreate.value && !fromList.value && Boolean(props.draft?.quickExecutable)
+))
+const quickItems = computed(() => (
+  Array.isArray(props.draft?.values?.items) ? props.draft.values.items : []
+))
+const adjustmentFor = (item) => (Array.isArray(props.draft?.adjustments)
+  ? props.draft.adjustments.find((adjustment) => (
+      String(adjustment?.itemId || '') === String(item?.itemId || '')
+      && adjustment?.code === 'SUPPLY_QUANTITY_ADJUSTED'
+    ))
+  : null)
 const originalItemId = computed(() => props.draft?.values?.itemId)
 const originalQuantity = computed(() => Number(props.draft?.values?.quantity || 0))
 const selectedItemIds = computed(() => form.rows.map((row) => String(row.itemId || '')).filter(Boolean))
@@ -183,6 +195,7 @@ async function loadItems() {
   }
 }
 async function openForm() {
+  if (completed.value || executing.value) return
   syncForm()
   isOpen.value = true
   await loadItems()
@@ -201,6 +214,7 @@ function confirm() {
       itemName: item?.itemName || row.itemName || null,
       category: item?.category || row.category || null,
       quantity: Number(row.quantity || 0),
+      stockQuantity: Number(item?.stockQuantity ?? row.stockQuantity ?? 0),
     }
   })
   const firstItem = normalizedItems[0] || {}
@@ -220,6 +234,24 @@ function confirm() {
   })
 }
 
+function quickConfirm() {
+  if (!quickExecutable.value || executing.value || completed.value) return
+  emit('confirm', {
+    draftId: props.draft.draftId,
+    version: props.draft.version,
+    values: {
+      ...(props.draft.values || {}),
+      items: quickItems.value.map((item) => ({
+        itemId: Number(item.itemId),
+        itemName: item.itemName || null,
+        category: item.category || null,
+        quantity: Number(item.quantity || 1),
+        stockQuantity: Number(item.stockQuantity ?? 0),
+      })),
+    },
+  })
+}
+
 watch(() => props.draft, syncForm, { immediate: true, deep: true })
 watch(completed, (value) => { if (value) isOpen.value = false }, { immediate: true })
 watch(() => props.draft?.draftId, () => {
@@ -228,7 +260,48 @@ watch(() => props.draft?.draftId, () => {
 </script>
 
 <template>
-  <section v-if="showInlineTrigger" class="draft-trigger">
+  <section v-if="quickExecutable" class="supply-quick-action">
+    <p v-if="draft.resolutionMessage" class="supply-quick-notice">
+      {{ draft.resolutionMessage }}
+    </p>
+    <div class="supply-quick-heading">
+      <div>
+        <span>빠른 실행</span>
+        <strong>사무용품 신청</strong>
+      </div>
+      <span class="supply-quick-ready">신청 가능</span>
+    </div>
+    <div class="supply-quick-items">
+      <div v-for="item in quickItems" :key="item.itemId" class="supply-quick-item">
+        <div class="supply-quick-item-name">
+          <span>사무용품</span>
+          <strong>{{ item.itemName }}</strong>
+        </div>
+        <div>
+          <span>신청 수량</span>
+          <strong>{{ item.quantity }}개</strong>
+        </div>
+        <div>
+          <span>확인 시 재고</span>
+          <strong>{{ item.stockQuantity }}개</strong>
+        </div>
+        <p v-if="adjustmentFor(item)" class="supply-quick-adjustment">
+          요청한 {{ adjustmentFor(item).requestedQuantity }}개에서 신청 가능한
+          {{ adjustmentFor(item).resolvedQuantity }}개로 조정했어요.
+        </p>
+      </div>
+    </div>
+    <div class="supply-quick-buttons">
+      <button type="button" class="secondary" :disabled="completed || executing" @click="openForm">
+        내용 확인·수정
+      </button>
+      <button type="button" class="primary" :disabled="completed || executing" @click="quickConfirm">
+        {{ completed ? '신청 완료' : executing ? '신청 처리 중...' : '바로 신청하기' }}
+      </button>
+    </div>
+  </section>
+
+  <section v-if="showInlineTrigger && !quickExecutable" class="draft-trigger">
     <button type="button" :disabled="completed || executing" @click="openForm">
       {{ completed ? '처리 완료' : executing ? '처리 중...' : actionLabel }}
     </button>
@@ -295,6 +368,7 @@ watch(() => props.draft?.draftId, () => {
             <textarea v-model="form.reason" rows="3" :disabled="!isCreate" placeholder="사용 목적이나 필요한 이유를 입력해 주세요."></textarea>
           </label>
           <p v-if="itemsError" class="form-error">{{ itemsError }}</p>
+          <p v-if="isCreate && draft.resolutionMessage" class="form-note">{{ draft.resolutionMessage }}</p>
           <p v-if="isUpdate && !hasChanges" class="form-note">품목이나 수량을 변경해야 수정할 수 있습니다.</p>
           <ActionResultCallout v-if="errorPresentation" :presentation="errorPresentation" compact />
         </div>
@@ -314,21 +388,37 @@ watch(() => props.draft?.draftId, () => {
 .draft-trigger { margin-top: 12px; }
 .draft-trigger button { min-height: 36px; padding: 0 15px; border: 1px solid var(--color-border); border-radius: 18px; background: var(--color-surface-raised); color: var(--color-text); font-weight: 700; cursor: pointer; }
 .draft-trigger button:hover:not(:disabled) { border-color: var(--color-primary-light); color: var(--color-primary-light); }
+.supply-quick-action { display: grid; width: 100%; max-width: none; box-sizing: border-box; gap: 14px; margin-top: 12px; padding: 16px; border: 1px solid var(--color-border-light); border-radius: 8px; background: var(--color-surface-soft); }
+.supply-quick-notice { margin: 0; padding: 10px 12px; border-left: 3px solid var(--color-primary-light); border-radius: 4px; background: var(--color-surface-raised); color: var(--color-text); font-size: 12px; line-height: 1.55; }
+.supply-quick-heading, .supply-quick-buttons { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.supply-quick-heading > div { display: grid; gap: 2px; }
+.supply-quick-heading span, .supply-quick-item span { color: var(--color-subtle); font-size: 11px; font-weight: 700; }
+.supply-quick-heading strong { color: var(--color-text); font-size: 15px; }
+.supply-quick-heading .supply-quick-ready { color: var(--color-primary-light); }
+.supply-quick-items { display: grid; gap: 8px; }
+.supply-quick-item { display: grid; grid-template-columns: minmax(0, 1fr) 90px 100px; gap: 10px; padding: 10px; border: 1px solid var(--color-border-light); border-radius: 6px; background: var(--color-surface-raised); }
+.supply-quick-item > div { display: grid; min-width: 0; gap: 4px; }
+.supply-quick-item strong { overflow-wrap: anywhere; color: var(--color-text); font-size: 12.5px; }
+.supply-quick-adjustment { grid-column: 1 / -1; margin: 0; padding-top: 8px; border-top: 1px solid var(--color-border-light); color: var(--color-primary-light); font-size: 11.5px; line-height: 1.5; }
+.supply-quick-buttons { justify-content: flex-end; }
+.supply-quick-buttons button { min-height: 36px; padding: 8px 15px; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.supply-quick-buttons .secondary { border: 1px solid var(--color-border); background: var(--color-surface-raised); color: var(--color-text); }
+.supply-quick-buttons .primary { border: 1px solid var(--color-primary); background: var(--color-primary); color: var(--color-white); }
 .primary { border: 1px solid var(--color-primary); border-radius: 6px; background: var(--color-primary); color: var(--color-white); font-weight: 700; cursor: pointer; }
 button:disabled { cursor: default; opacity: .55; }
-.modal-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .48); }
-.modal { width: min(680px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface-raised); box-shadow: 0 18px 50px rgba(15, 23, 42, .22); }
-.modal header { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 20px; border-bottom: 1px solid var(--color-border-light); }
-.modal header span { color: var(--color-primary); font-size: 11px; font-weight: 800; }
-.modal h2 { margin: 4px 0 0; font-size: 18px; }
-.close { border: 0; background: transparent; color: var(--color-subtle); font-size: 24px; cursor: pointer; }
-.form-grid { display: grid; grid-template-columns: 1fr 130px; gap: 14px; padding: 20px; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .42); }
+.modal { width: min(680px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface-raised); box-shadow: 0 18px 48px rgba(15, 23, 42, .22); }
+.modal header { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 20px 14px; border-bottom: 1px solid var(--color-border-light); }
+.modal header span { color: var(--color-primary); font-size: 11px; font-weight: 700; }
+.modal h2 { margin: 4px 0 0; color: var(--color-text); font-size: 18px; letter-spacing: 0; }
+.close { border: 0; background: transparent; color: var(--color-subtle); font-size: 24px; line-height: 1; cursor: pointer; }
+.form-grid { display: grid; grid-template-columns: 1fr 130px; gap: 14px; padding: 18px 20px; }
 .item-list { grid-column: 1 / -1; display: grid; gap: 12px; }
 .item-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; align-items: end; gap: 12px; }
-label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+label { display: grid; gap: 6px; color: var(--color-text); font-size: 12px; font-weight: 700; }
 label > span small { color: var(--color-subtle); font-weight: 500; }
 .wide, .form-error, .form-note, .form-grid :deep(.action-result-callout) { grid-column: 1 / -1; }
-input, select, textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--color-border); border-radius: 6px; padding: 9px 10px; background: var(--color-surface); color: var(--color-text); font: inherit; }
+input, select, textarea { width: 100%; min-height: 40px; box-sizing: border-box; border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 10px; background: var(--color-surface); color: var(--color-text); font: inherit; }
 textarea { resize: vertical; }
 .form-error { margin: 0; color: var(--color-danger); font-size: 12px; }
 .row-error { grid-column: 1 / -1; margin: -4px 0 0; color: var(--color-danger); font-size: 12px; }
@@ -336,8 +426,8 @@ textarea { resize: vertical; }
 .add-item { justify-self: start; min-height: 34px; padding: 0 12px; border: 1px dashed var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-primary); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .add-item span { margin-left: 5px; color: var(--color-subtle); font-weight: 500; }
 .remove-item { min-height: 38px; padding: 0 11px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface-raised); color: var(--color-danger); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
-.modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--color-border-light); }
+.modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid var(--color-border-light); }
 .modal footer button { min-height: 38px; padding: 0 15px; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 700; }
 .secondary { border: 1px solid var(--color-border); background: var(--color-surface-raised); color: var(--color-text); }
-@media (max-width: 620px) { .modal-backdrop { padding: 10px; } .form-grid { grid-template-columns: 1fr; padding: 16px; } .item-row { grid-template-columns: minmax(0, 1fr) 100px; } .remove-item { grid-column: 1 / -1; justify-self: end; min-height: 32px; } .wide, .form-error, .form-note { grid-column: 1; } }
+@media (max-width: 620px) { .supply-quick-item { grid-template-columns: repeat(2, minmax(0, 1fr)); } .supply-quick-item-name { grid-column: 1 / -1; } .supply-quick-buttons { align-items: stretch; flex-direction: column-reverse; } .supply-quick-buttons button { width: 100%; } .modal-backdrop { align-items: end; padding: 0; } .modal { width: 100%; max-height: 92vh; border-radius: 8px 8px 0 0; } .form-grid { grid-template-columns: 1fr; padding: 16px 20px; } .item-row { grid-template-columns: minmax(0, 1fr) 100px; } .remove-item { grid-column: 1 / -1; justify-self: end; min-height: 32px; } .wide, .form-error, .form-note { grid-column: 1; } }
 </style>

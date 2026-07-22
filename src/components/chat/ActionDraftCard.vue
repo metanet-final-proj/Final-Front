@@ -81,6 +81,22 @@ const actionVerb = computed(() => {
 const completed = computed(() => status.value === 'COMPLETED')
 const hiddenAfterCompletion = computed(() => completed.value && (isUpdate.value || isCancellation.value))
 const executing = computed(() => status.value === 'EXECUTING' || props.loading)
+const quickExecutable = computed(() => (
+  isReservation.value
+  && Boolean(props.draft?.quickExecutable)
+  && (props.draft?.missingFields || []).length === 0
+))
+const adjustments = computed(() => Array.isArray(props.draft?.adjustments) ? props.draft.adjustments : [])
+const hasRoomAdjustment = computed(() => adjustments.value.some(
+  (adjustment) => adjustment?.code === 'MEETING_ROOM_AUTO_REASSIGNED',
+))
+const quickActionLabel = computed(() => (
+  hasRoomAdjustment.value ? '대체 회의실로 바로 예약' : '바로 예약하기'
+))
+const quickTimeRange = computed(() => {
+  const values = props.draft?.values || {}
+  return values.startTime && values.endTime ? `${values.startTime} - ${values.endTime}` : ''
+})
 const hasValidTimeRange = computed(() => (
   Boolean(form.startTime && form.endTime) && form.startTime < form.endTime
 ))
@@ -209,6 +225,15 @@ const roomSummary = computed(() => {
   return '회의실 미선택'
 })
 
+const quickRoomSummary = computed(() => {
+  const values = props.draft?.values || {}
+  const name = values.roomName || roomSummary.value
+  const roomCapacity = Number(values.roomCapacity)
+  return Number.isFinite(roomCapacity) && roomCapacity > 0
+    ? `${name} · 정원 ${roomCapacity}명`
+    : name
+})
+
 const completionTitle = computed(() => (
   isCancellation.value
     ? '회의실 예약이 취소되었습니다.'
@@ -268,6 +293,7 @@ const streamCompletion = () => {
 }
 
 const openForm = async () => {
+  if (completed.value || executing.value) return
   syncForm()
   isOpen.value = true
   if (isReservation.value) await loadRooms()
@@ -329,6 +355,21 @@ const confirm = () => {
       roomName: isReservation.value ? (selectedRoom.value?.name || null) : (form.roomName || null),
       selectionNumber: null,
       capacity: form.capacity ? Number(form.capacity) : null,
+      allowFallback: false,
+    },
+  })
+}
+
+const quickConfirm = () => {
+  if (!quickExecutable.value || executing.value || completed.value) return
+  emit('confirm', {
+    draftId: props.draft.draftId,
+    version: props.draft.version,
+    values: {
+      ...(props.draft.values || {}),
+      roomId: Number(props.draft.values.roomId),
+      capacity: Number(props.draft.values.capacity || 3),
+      allowFallback: false,
     },
   })
 }
@@ -336,7 +377,34 @@ const confirm = () => {
 
 <template>
   <section v-if="showInlineTrigger && !hiddenAfterCompletion" class="action-draft-action">
+    <div v-if="quickExecutable" class="quick-action-card">
+      <p v-if="draft.resolutionMessage" class="quick-action-notice">
+        {{ draft.resolutionMessage }}
+      </p>
+      <div class="quick-action-heading">
+        <div>
+          <span>빠른 실행</span>
+          <strong>회의실 예약</strong>
+        </div>
+        <span class="quick-action-ready">예약 가능</span>
+      </div>
+      <dl class="quick-action-summary">
+        <div><dt>회의실</dt><dd>{{ quickRoomSummary }}</dd></div>
+        <div><dt>날짜</dt><dd>{{ draft.values.date }}</dd></div>
+        <div><dt>시간</dt><dd>{{ quickTimeRange }}</dd></div>
+        <div><dt>인원</dt><dd>{{ draft.values.capacity }}명</dd></div>
+      </dl>
+      <div class="quick-action-buttons">
+        <button type="button" class="action-secondary" :disabled="completed || executing" @click="openForm">
+          내용 확인·수정
+        </button>
+        <button type="button" class="action-primary" :disabled="completed || executing" @click="quickConfirm">
+          {{ completed ? '예약 완료' : executing ? '예약 처리 중...' : quickActionLabel }}
+        </button>
+      </div>
+    </div>
     <button
+      v-else
       type="button"
       class="action-draft-open"
       :disabled="completed || executing"
@@ -356,7 +424,7 @@ const confirm = () => {
       <section class="action-modal" role="dialog" aria-modal="true" aria-labelledby="meeting-action-title">
         <header>
           <div>
-            <span>최종 승인</span>
+            <span>최종 확인</span>
             <h2 id="meeting-action-title">{{ actionLabel }}</h2>
           </div>
           <button type="button" class="action-modal-close" :disabled="executing" aria-label="닫기" @click="closeForm">×</button>
@@ -502,36 +570,100 @@ const confirm = () => {
 
 .action-draft-open:disabled { cursor: default; opacity: 0.62; }
 
+.quick-action-card {
+  display: grid;
+  gap: 13px;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-soft);
+}
+
+.quick-action-notice {
+  margin: -16px -16px 0;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-primary-light) 8%, var(--color-surface-raised));
+  color: var(--color-text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.quick-action-heading,
+.quick-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.quick-action-heading > div { display: grid; gap: 2px; }
+.quick-action-heading span { color: var(--color-subtle); font-size: 11px; font-weight: 700; }
+.quick-action-heading strong { color: var(--color-text); font-size: 15px; }
+.quick-action-heading .quick-action-ready { color: var(--color-primary-light); }
+
+.quick-action-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.quick-action-summary > div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--color-border-light);
+  border-radius: 6px;
+  background: var(--color-surface-raised);
+}
+
+.quick-action-summary dt { color: var(--color-subtle); font-size: 10.5px; }
+.quick-action-summary dd {
+  overflow-wrap: anywhere;
+  margin: 4px 0 0;
+  color: var(--color-text);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.quick-action-buttons { justify-content: flex-end; }
+.quick-action-buttons .action-secondary { background: var(--color-surface-raised); }
+
 .action-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 2000;
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(15, 23, 42, 0.44);
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .action-modal {
   width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface-raised);
-  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
 }
 
 .action-modal header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 20px 22px 14px;
+  padding: 18px 20px 14px;
   border-bottom: 1px solid var(--color-border-light);
 }
 
-.action-modal header span { color: var(--color-primary-light); font-size: 11px; font-weight: 700; }
-.action-modal h2 { margin: 3px 0 0; color: var(--color-text); font-size: 19px; letter-spacing: 0; }
+.action-modal header span { color: var(--color-primary); font-size: 11px; font-weight: 700; }
+.action-modal h2 { margin: 4px 0 0; color: var(--color-text); font-size: 18px; letter-spacing: 0; }
 .action-modal-close { border: 0; background: transparent; color: var(--color-subtle); font-size: 24px; line-height: 1; }
-.action-modal form { padding: 18px 22px 22px; }
+.action-modal form { padding: 18px 20px 0; }
 
 .action-form-grid {
   display: grid;
@@ -548,7 +680,7 @@ const confirm = () => {
   box-sizing: border-box;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: var(--color-surface-soft);
+  background: var(--color-surface);
   color: var(--color-text);
   padding: 8px 10px;
   font: inherit;
@@ -578,14 +710,20 @@ const confirm = () => {
 .action-cancel-summary strong { font-size: 14px; }
 .action-cancel-summary p { margin: 3px 0 0; color: var(--color-subtle); font-size: 12px; }
 
-.action-modal footer { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
+.action-modal footer { display: flex; justify-content: flex-end; gap: 8px; margin: 20px -20px 0; padding: 14px 20px 18px; border-top: 1px solid var(--color-border-light); }
 .action-secondary,
 .action-primary { min-height: 38px; border-radius: 6px; padding: 0 15px; font-size: 13px; font-weight: 700; }
-.action-secondary { border: 1px solid var(--color-border); background: transparent; color: var(--color-text); }
+.action-secondary { border: 1px solid var(--color-border); background: var(--color-surface-raised); color: var(--color-text); }
 .action-primary { border: 1px solid var(--color-primary); background: var(--color-primary); color: var(--color-white); }
+.action-secondary:disabled,
 .action-primary:disabled { cursor: not-allowed; opacity: 0.5; }
 
 @media (max-width: 640px) {
   .action-form-grid { grid-template-columns: 1fr; }
+  .quick-action-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quick-action-buttons { align-items: stretch; flex-direction: column-reverse; }
+  .quick-action-buttons button { width: 100%; }
+  .action-modal-backdrop { align-items: end; padding: 0; }
+  .action-modal { width: 100%; max-height: 92vh; border-radius: 8px 8px 0 0; }
 }
 </style>

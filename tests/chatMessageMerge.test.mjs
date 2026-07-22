@@ -95,6 +95,44 @@ test('the persisted assistant replaces the tracked cache without duplication', (
   assert.deepEqual(merged, [serverAssistant])
 })
 
+test('a persisted equivalent replaces a local in-flight assistant without duplication', () => {
+  const serverAssistant = {
+    id: 'server-assistant-1',
+    messageId: 'server-assistant-1',
+    role: 'assistant',
+    text: '회의실 예약 양식을 준비했어요.',
+    isLocal: false,
+  }
+  const localAssistant = {
+    id: 'local-assistant-1',
+    messageId: null,
+    role: 'assistant',
+    text: '회의실 예약 양식을 준비했어요.',
+    isLocal: true,
+    isLoading: false,
+    agentActivity: {
+      currentText: '답변을 작성하는 중',
+      steps: [{ id: 'step-1', title: '요청 분석' }],
+    },
+  }
+  const inFlight = {
+    conversationId: 'conversation-1',
+    assistantMessageId: 'local-assistant-1',
+    status: 'streaming',
+  }
+
+  const merged = mergeFetchedMessagesWithInFlight(
+    [serverAssistant],
+    [localAssistant],
+    inFlight,
+  )
+
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].id, 'local-assistant-1')
+  assert.equal(merged[0].messageId, 'server-assistant-1')
+  assert.deepEqual(merged[0].agentActivity, localAssistant.agentActivity)
+})
+
 test('chat store tracks in-flight work by conversation id', () => {
   assert.match(chatStoreSource, /inFlightByConversationId/)
   assert.match(chatStoreSource, /assistantMessageId/)

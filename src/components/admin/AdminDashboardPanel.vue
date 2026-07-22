@@ -618,11 +618,12 @@ const domainLabel = (domain) => {
     policy_rag: '사내 규정',
     childcare: '보육',
     agent_internal: 'AI 내부 동작',
-    general: '기타',
-    smalltalk: '기타',
+    general: '일반·잡담',
+    smalltalk: '일반·잡담',
     rag: 'RAG',
     transcription: '음성 인식',
     unknown: '기타',
+    other: '기타',
   }
 
   return labels[domain] ?? domain ?? '-'

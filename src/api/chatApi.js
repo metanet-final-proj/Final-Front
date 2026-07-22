@@ -192,15 +192,9 @@ export const chatApi = {
   },
 
   confirmActionDraft(draftId, version, values) {
-    const idempotencyKey = `action_${crypto.randomUUID()}`
     return apiClient.post(
       `/api/v1/chat/action-drafts/${draftId}/confirm`,
       { version, values },
-      {
-        headers: {
-          'Idempotency-Key': idempotencyKey,
-        },
-      },
     )
   },
 

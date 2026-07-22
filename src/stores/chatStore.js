@@ -103,6 +103,67 @@ const updateAgentStep = (activity, nextStep) => {
   }
 }
 
+const updateRepeatedToolStep = (activity, nextStep) => {
+  const steps = activity.steps || []
+  const existingIndex = steps.findIndex(
+    (step) =>
+      step.id === nextStep.id ||
+      (Array.isArray(step.eventStepIds) && step.eventStepIds.includes(nextStep.id)),
+  )
+
+  if (existingIndex >= 0) {
+    return {
+      ...activity,
+      steps: steps.map((step, index) =>
+        index === existingIndex
+          ? {
+              ...step,
+              ...nextStep,
+              id: step.id,
+              repeatCount: step.repeatCount || 1,
+              eventStepIds: step.eventStepIds || [step.id],
+            }
+          : step,
+      ),
+    }
+  }
+
+  const lastIndex = steps.length - 1
+  const lastStep = steps[lastIndex]
+  const isSameAsPrevious =
+    lastStep?.type === 'tool' &&
+    lastStep.tool === nextStep.tool &&
+    lastStep.title === nextStep.title
+
+  if (isSameAsPrevious) {
+    return {
+      ...activity,
+      steps: steps.map((step, index) =>
+        index === lastIndex
+          ? {
+              ...step,
+              status: nextStep.status,
+              repeatCount: (step.repeatCount || 1) + 1,
+              eventStepIds: [...(step.eventStepIds || [step.id]), nextStep.id],
+            }
+          : step,
+      ),
+    }
+  }
+
+  return {
+    ...activity,
+    steps: [
+      ...steps,
+      {
+        ...nextStep,
+        repeatCount: 1,
+        eventStepIds: [nextStep.id],
+      },
+    ],
+  }
+}
+
 const updateAgentActivityFromEvent = (activity, parsed) => {
   const statusText = getStatusText(parsed)
 
@@ -183,21 +244,23 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
         : step,
     )
 
-    return updateAgentStep(
-      {
-        ...baseActivity,
-        currentText: statusText,
-        collapsed: false,
-        steps: completedSteps,
-      },
-      {
-        id: stepId,
-        type: tool ? 'tool' : 'progress',
-        tool,
-        title: statusText,
-        status: isToolTerminal ? 'done' : 'running',
-      },
-    )
+    const nextActivity = {
+      ...baseActivity,
+      currentText: statusText,
+      collapsed: false,
+      steps: completedSteps,
+    }
+    const nextStep = {
+      id: stepId,
+      type: tool ? 'tool' : 'progress',
+      tool,
+      title: statusText,
+      status: isToolTerminal ? 'done' : 'running',
+    }
+
+    return tool
+      ? updateRepeatedToolStep(nextActivity, nextStep)
+      : updateAgentStep(nextActivity, nextStep)
   }
 
   return {
@@ -275,7 +338,14 @@ const normalizeMessage = (message) => {
     message.conversationId || message.conversation_id || message.chatConversationId || null
   const createdAt = message.createdAt || message.created_at || null
   const role = normalizeRole(message.role)
-  const content = message.content ?? message.message ?? message.text ?? ''
+  const actionDraft = message.actionDraft || message.action_draft || null
+  const originalContent = message.content ?? message.message ?? message.text ?? ''
+  const presentationMessage = String(
+    actionDraft?.presentationMessage || actionDraft?.presentation_message || '',
+  ).trim()
+  const content = role === 'assistant' && presentationMessage
+    ? presentationMessage
+    : originalContent
 
   return {
     id: messageId || `${role}-${createdAt || Date.now()}-${Math.random()}`,
@@ -286,7 +356,7 @@ const normalizeMessage = (message) => {
     content,
     tag: message.tag || null,
     agentActivity: message.agentActivity || null,
-    actionDraft: message.actionDraft || message.action_draft || null,
+    actionDraft,
     meetingReservations: message.meetingReservations || message.meeting_reservations || null,
     meetingReservationActionResult:
       message.meetingReservationActionResult || message.meeting_reservation_action_result || null,
@@ -800,12 +870,38 @@ export const useChatStore = defineStore('chat', {
       const draftId = actionDraft?.draftId || actionDraft?.draft_id
       if (!draftId) return
 
+      const preserveSupplyItemSnapshots = (currentDraft, nextDraft) => {
+        const currentItems = currentDraft?.values?.items
+        const nextItems = nextDraft?.values?.items
+        if (!Array.isArray(currentItems) || !Array.isArray(nextItems)) return nextDraft
+
+        const currentById = new Map(currentItems.map((item) => [
+          String(item?.itemId ?? item?.item_id ?? ''),
+          item,
+        ]))
+        return {
+          ...nextDraft,
+          values: {
+            ...(nextDraft.values || {}),
+            items: nextItems.map((item) => {
+              const previous = currentById.get(String(item?.itemId ?? item?.item_id ?? ''))
+              return item?.stockQuantity == null && item?.stock_quantity == null && previous
+                ? { ...item, stockQuantity: previous.stockQuantity ?? previous.stock_quantity ?? 0 }
+                : item
+            }),
+          },
+        }
+      }
+
       const updated = {}
       Object.entries(this.messagesByConversationId).forEach(([key, messages]) => {
         updated[key] = (messages || []).map((message) => {
           const currentDraftId = message.actionDraft?.draftId || message.actionDraft?.draft_id
           return String(currentDraftId || '') === String(draftId)
-            ? { ...message, actionDraft }
+            ? {
+                ...message,
+                actionDraft: preserveSupplyItemSnapshots(message.actionDraft, actionDraft),
+              }
             : message
         })
       })

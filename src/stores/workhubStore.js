@@ -15,15 +15,37 @@ const TONE_BY_KEY = {
   supplyRequests: 'blue',
 }
 
-const normalizeSection = (key, section) => ({
-  key: section?.key || key,
-  title: section?.title || '',
-  badge: section?.badge || '',
-  actionLabel: section?.actionLabel || '',
-  actionQuery: section?.actionQuery || '',
-  emptyText: section?.emptyText || '표시할 내역이 없습니다.',
-  items: Array.isArray(section?.items) ? section.items : [],
-})
+const MANAGEMENT_ACTION_BY_KEY = {
+  reservations: {
+    label: '예약 내역 수정·취소',
+    query: '내 회의실 예약 내역 보여줘',
+  },
+  parking: {
+    label: '등록 내역 수정·취소',
+    query: '내 방문객 주차 등록 내역 보여줘',
+  },
+  supplies: {
+    label: '신청 내역 수정·취소',
+    query: '내 비품 신청 현황 보여줘',
+  },
+}
+
+const normalizeSection = (key, section) => {
+  const normalizedKey = section?.key || key
+  const managementAction = MANAGEMENT_ACTION_BY_KEY[normalizedKey] || null
+
+  return {
+    key: normalizedKey,
+    title: section?.title || '',
+    badge: section?.badge || '',
+    actionLabel: section?.actionLabel || '',
+    actionQuery: section?.actionQuery || '',
+    emptyText: section?.emptyText || '표시할 내역이 없습니다.',
+    items: Array.isArray(section?.items) ? section.items : [],
+    manageActionLabel: managementAction?.label || '',
+    manageActionQuery: managementAction?.query || '',
+  }
+}
 
 export const useWorkhubStore = defineStore('workhub', {
   state: () => ({

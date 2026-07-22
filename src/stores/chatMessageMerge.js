@@ -6,6 +6,30 @@ const hasMessageId = (message, targetId) => {
     .some((messageId) => String(messageId) === String(targetId))
 }
 
+const normalizedText = (message) => String(
+  message?.text ?? message?.content ?? '',
+).trim()
+
+const isEquivalentPersistedAssistant = (serverMessage, localMessage) => {
+  if (serverMessage?.role !== 'assistant' || localMessage?.role !== 'assistant') {
+    return false
+  }
+
+  const serverText = normalizedText(serverMessage)
+  const localText = normalizedText(localMessage)
+
+  return Boolean(serverText && localText && serverText === localText)
+}
+
+const mergePersistedAssistantWithInFlight = (serverMessage, inFlightAssistant) => ({
+  ...serverMessage,
+  id: inFlightAssistant.id,
+  messageId: serverMessage.messageId ?? serverMessage.id,
+  agentActivity: inFlightAssistant.agentActivity || serverMessage.agentActivity || null,
+  isLocal: true,
+  isLoading: inFlightAssistant.isLoading,
+})
+
 export const hasTrackedAssistantMessage = (
   messages = [],
   inFlight = null,
@@ -38,6 +62,18 @@ export const mergeFetchedMessagesWithInFlight = (
   )
 
   if (serverAlreadyContainsAssistant) return serverMessages
+
+  const equivalentServerAssistant = serverMessages.find((message) =>
+    isEquivalentPersistedAssistant(message, inFlightAssistant),
+  )
+
+  if (equivalentServerAssistant) {
+    return serverMessages.map((message) => (
+      message === equivalentServerAssistant
+        ? mergePersistedAssistantWithInFlight(message, inFlightAssistant)
+        : message
+    ))
+  }
 
   return [...serverMessages, inFlightAssistant]
 }
