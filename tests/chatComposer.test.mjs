@@ -30,13 +30,13 @@ test('both send buttons use a centered upward arrow', () => {
   )
 })
 
-test('answering keeps the composer editable while send stays disabled', () => {
+test('recording locks the composer while answering only disables send', () => {
   assert.equal(
-    chatViewSource.match(/:disabled="isTranscribing"/g)?.length,
+    chatViewSource.match(/:disabled="isRecording \|\| isTranscribing"/g)?.length,
     2,
   )
   assert.equal(
-    chatViewSource.match(/:disabled="isAnswering \|\| isTranscribing"/g)?.length,
+    chatViewSource.match(/:disabled="isAnswering \|\| isRecording \|\| isTranscribing"/g)?.length,
     2,
   )
 })
@@ -69,7 +69,7 @@ test('chat URLs retain the conversation id for refresh restoration', () => {
 test('stream auto-follow pauses when the user scrolls away from the bottom', () => {
   assert.match(
     chatViewSource,
-    /const handleThreadScroll = \(\) => \{\s*autoFollowThread\.value = isThreadNearBottom\(\)/,
+    /const handleThreadScroll = \(\) => \{[\s\S]*?threadUserScrollIntentUntil[\s\S]*?autoFollowThread\.value = isThreadNearBottom\(\)/,
   )
   assert.match(
     chatViewSource,
@@ -78,5 +78,15 @@ test('stream auto-follow pauses when the user scrolls away from the bottom', () 
   assert.match(
     chatViewSource,
     /@scroll\.passive="handleThreadScroll"/,
+  )
+  assert.match(chatViewSource, /@wheel\.passive="markThreadScrollIntent"/)
+})
+
+test('structured chat content keeps auto-following through final layout changes', () => {
+  assert.match(chatViewSource, /threadResizeObserver = new ResizeObserver/)
+  assert.match(chatViewSource, /threadResizeObserver\.observe\(element\)/)
+  assert.match(
+    chatViewSource,
+    /threadMutationObserver = new MutationObserver\(\(\) => \{[\s\S]*?observeMessageRows\(\)[\s\S]*?requestScrollThread\(\)/,
   )
 })

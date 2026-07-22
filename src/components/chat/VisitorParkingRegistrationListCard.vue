@@ -11,7 +11,7 @@ const props = defineProps({
 
 const emit = defineEmits(['edit', 'cancel'])
 const visibleRegistrations = computed(() => props.registrations.filter((item) => (
-  item?.requestId && String(item.status || 'REGISTERED').toUpperCase() !== 'CANCELLED'
+  item?.requestId
 )))
 const actionResultPresentation = computed(() => {
   const result = props.actionResult
@@ -32,9 +32,13 @@ function isLoading(item) {
   return String(props.loadingRequestId || '') === String(item.requestId)
 }
 
+function isEditable(item) {
+  return String(item.status || 'REGISTERED').toUpperCase() === 'REGISTERED'
+}
+
 function statusText(item) {
   const status = String(item.status || 'REGISTERED').toUpperCase()
-  if (status === 'CANCELLED') return '취소'
+  if (status === 'CANCELLED') return '취소됨'
   if (status === 'COMPLETED') return '방문 완료'
   return '등록'
 }
@@ -61,7 +65,7 @@ function parkingLotText(item) {
     />
 
     <p v-if="visibleRegistrations.length === 0" class="parking-list-empty">
-      수정하거나 취소할 수 있는 방문객 주차 등록이 없습니다.
+      표시할 방문객 주차 등록 내역이 없습니다.
     </p>
 
     <div v-else class="parking-list-table-wrap">
@@ -87,8 +91,8 @@ function parkingLotText(item) {
             <td>{{ item.visitDate || '-' }}</td>
             <td><span class="status-chip">{{ statusText(item) }}</span></td>
             <td class="parking-actions">
-              <button type="button" :disabled="isLoading(item)" @click="emit('edit', item)">수정</button>
-              <button type="button" :disabled="isLoading(item)" @click="emit('cancel', item)">취소</button>
+              <button type="button" :disabled="!isEditable(item) || isLoading(item)" @click="emit('edit', item)">수정</button>
+              <button type="button" :disabled="!isEditable(item) || isLoading(item)" @click="emit('cancel', item)">취소</button>
             </td>
           </tr>
         </tbody>

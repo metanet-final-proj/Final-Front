@@ -24,6 +24,7 @@ const ASSISTANT_FAILURE_TEXT = '답변 생성에 실패했습니다. 잠시 후 
 const STAGE_LABELS = {
   planning: '요청을 분석하고 있어요...',
   summarizing: '지금까지의 대화를 요약하고 있어요...',
+  tool_selecting: '필요한 정보와 작업을 결정하고 있어요...',
   generating: '답변을 작성하고 있어요...',
 }
 
@@ -51,10 +52,11 @@ const getStatusText = (parsed) => {
 const AGENT_STAGE_TITLES = {
   planning: '요청을 분석하고 계획을 세우는 중',
   summarizing: '답변을 요약하는 중',
-  generating: '답변 생성을 준비하는 중',
+  tool_selecting: '필요한 정보와 작업을 결정하는 중',
+  generating: '결과를 바탕으로 답변을 작성하는 중',
 }
 
-const RUNNING_STATUS_STAGES = new Set(['summarizing', 'generating'])
+const RUNNING_STATUS_STAGES = new Set(['summarizing', 'tool_selecting', 'generating'])
 
 const createAgentActivity = (currentText = ASSISTANT_LOADING_TEXT) => ({
   currentText,
@@ -101,6 +103,67 @@ const updateAgentStep = (activity, nextStep) => {
   }
 }
 
+const updateRepeatedToolStep = (activity, nextStep) => {
+  const steps = activity.steps || []
+  const existingIndex = steps.findIndex(
+    (step) =>
+      step.id === nextStep.id ||
+      (Array.isArray(step.eventStepIds) && step.eventStepIds.includes(nextStep.id)),
+  )
+
+  if (existingIndex >= 0) {
+    return {
+      ...activity,
+      steps: steps.map((step, index) =>
+        index === existingIndex
+          ? {
+              ...step,
+              ...nextStep,
+              id: step.id,
+              repeatCount: step.repeatCount || 1,
+              eventStepIds: step.eventStepIds || [step.id],
+            }
+          : step,
+      ),
+    }
+  }
+
+  const lastIndex = steps.length - 1
+  const lastStep = steps[lastIndex]
+  const isSameAsPrevious =
+    lastStep?.type === 'tool' &&
+    lastStep.tool === nextStep.tool &&
+    lastStep.title === nextStep.title
+
+  if (isSameAsPrevious) {
+    return {
+      ...activity,
+      steps: steps.map((step, index) =>
+        index === lastIndex
+          ? {
+              ...step,
+              status: nextStep.status,
+              repeatCount: (step.repeatCount || 1) + 1,
+              eventStepIds: [...(step.eventStepIds || [step.id]), nextStep.id],
+            }
+          : step,
+      ),
+    }
+  }
+
+  return {
+    ...activity,
+    steps: [
+      ...steps,
+      {
+        ...nextStep,
+        repeatCount: 1,
+        eventStepIds: [nextStep.id],
+      },
+    ],
+  }
+}
+
 const updateAgentActivityFromEvent = (activity, parsed) => {
   const statusText = getStatusText(parsed)
 
@@ -111,8 +174,10 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
 
   if (parsed.event === 'status') {
     const stage = data.stage || 'status'
+    const sequenceNo = data.sequenceNo ?? data.sequence_no ?? null
+    const stepSuffix = sequenceNo == null ? '' : `-${sequenceNo}`
     const nextStep = {
-      id: `status-${stage}`,
+      id: `status-${stage}${stepSuffix}`,
       type: 'status',
       title: data.message || AGENT_STAGE_TITLES[stage] || statusText,
       status: RUNNING_STATUS_STAGES.has(stage) ? 'running' : 'done',
@@ -166,8 +231,10 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
   if (parsed.event === 'progress') {
     const stage = data.stage || 'progress'
     const tool = data.tool || data.name || null
-    const isToolEnd = stage === 'tool_end'
-    const stepId = tool ? `tool-${tool}` : `progress-${stage}`
+    const isToolTerminal = stage === 'tool_end' || stage === 'tool_error'
+    const sequenceNo = data.sequenceNo ?? data.sequence_no ?? null
+    const stepSuffix = sequenceNo == null ? '' : `-${sequenceNo}`
+    const stepId = tool ? `tool-${tool}${stepSuffix}` : `progress-${stage}${stepSuffix}`
     const completedSteps = (baseActivity.steps || []).map((step) =>
       step.status === 'running' && step.id !== stepId
         ? {
@@ -177,21 +244,23 @@ const updateAgentActivityFromEvent = (activity, parsed) => {
         : step,
     )
 
-    return updateAgentStep(
-      {
-        ...baseActivity,
-        currentText: statusText,
-        collapsed: false,
-        steps: completedSteps,
-      },
-      {
-        id: stepId,
-        type: tool ? 'tool' : 'progress',
-        tool,
-        title: statusText,
-        status: isToolEnd ? 'done' : 'running',
-      },
-    )
+    const nextActivity = {
+      ...baseActivity,
+      currentText: statusText,
+      collapsed: false,
+      steps: completedSteps,
+    }
+    const nextStep = {
+      id: stepId,
+      type: tool ? 'tool' : 'progress',
+      tool,
+      title: statusText,
+      status: isToolTerminal ? 'done' : 'running',
+    }
+
+    return tool
+      ? updateRepeatedToolStep(nextActivity, nextStep)
+      : updateAgentStep(nextActivity, nextStep)
   }
 
   return {
@@ -269,7 +338,14 @@ const normalizeMessage = (message) => {
     message.conversationId || message.conversation_id || message.chatConversationId || null
   const createdAt = message.createdAt || message.created_at || null
   const role = normalizeRole(message.role)
-  const content = message.content ?? message.message ?? message.text ?? ''
+  const actionDraft = message.actionDraft || message.action_draft || null
+  const originalContent = message.content ?? message.message ?? message.text ?? ''
+  const presentationMessage = String(
+    actionDraft?.presentationMessage || actionDraft?.presentation_message || '',
+  ).trim()
+  const content = role === 'assistant' && presentationMessage
+    ? presentationMessage
+    : originalContent
 
   return {
     id: messageId || `${role}-${createdAt || Date.now()}-${Math.random()}`,
@@ -280,7 +356,7 @@ const normalizeMessage = (message) => {
     content,
     tag: message.tag || null,
     agentActivity: message.agentActivity || null,
-    actionDraft: message.actionDraft || message.action_draft || null,
+    actionDraft,
     meetingReservations: message.meetingReservations || message.meeting_reservations || null,
     meetingReservationActionResult:
       message.meetingReservationActionResult || message.meeting_reservation_action_result || null,
@@ -794,12 +870,38 @@ export const useChatStore = defineStore('chat', {
       const draftId = actionDraft?.draftId || actionDraft?.draft_id
       if (!draftId) return
 
+      const preserveSupplyItemSnapshots = (currentDraft, nextDraft) => {
+        const currentItems = currentDraft?.values?.items
+        const nextItems = nextDraft?.values?.items
+        if (!Array.isArray(currentItems) || !Array.isArray(nextItems)) return nextDraft
+
+        const currentById = new Map(currentItems.map((item) => [
+          String(item?.itemId ?? item?.item_id ?? ''),
+          item,
+        ]))
+        return {
+          ...nextDraft,
+          values: {
+            ...(nextDraft.values || {}),
+            items: nextItems.map((item) => {
+              const previous = currentById.get(String(item?.itemId ?? item?.item_id ?? ''))
+              return item?.stockQuantity == null && item?.stock_quantity == null && previous
+                ? { ...item, stockQuantity: previous.stockQuantity ?? previous.stock_quantity ?? 0 }
+                : item
+            }),
+          },
+        }
+      }
+
       const updated = {}
       Object.entries(this.messagesByConversationId).forEach(([key, messages]) => {
         updated[key] = (messages || []).map((message) => {
           const currentDraftId = message.actionDraft?.draftId || message.actionDraft?.draft_id
           return String(currentDraftId || '') === String(draftId)
-            ? { ...message, actionDraft }
+            ? {
+                ...message,
+                actionDraft: preserveSupplyItemSnapshots(message.actionDraft, actionDraft),
+              }
             : message
         })
       })

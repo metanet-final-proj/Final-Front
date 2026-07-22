@@ -12,7 +12,7 @@ const props = defineProps({
 
 const emit = defineEmits(['edit', 'cancel'])
 const visibleRequests = computed(() => props.requests.filter((item) => (
-  item?.requestId && String(item.status || 'REQUESTED').toUpperCase() !== 'CANCELLED'
+  item?.requestId
 )))
 const actionResultPresentation = computed(() => props.actionResult?.presentation || null)
 
@@ -23,7 +23,7 @@ function isLoading(item) {
   return String(props.loadingRequestId || '') === String(item.requestId)
 }
 function statusText(item) {
-  return ({ REQUESTED: '신청', APPROVED: '승인', REJECTED: '반려' })[
+  return ({ REQUESTED: '신청', APPROVED: '승인', REJECTED: '반려', CANCELLED: '취소됨' })[
     String(item.status || 'REQUESTED').toUpperCase()
   ] || String(item.status || '-')
 }
@@ -40,7 +40,7 @@ function requestedDate(value) {
       <span>{{ visibleRequests.length }}건</span>
     </div>
     <ActionResultCallout v-if="actionResultPresentation" :presentation="actionResultPresentation" compact />
-    <p v-if="visibleRequests.length === 0" class="empty">진행 중인 사무용품 신청 내역이 없습니다.</p>
+    <p v-if="visibleRequests.length === 0" class="empty">표시할 사무용품 신청 내역이 없습니다.</p>
     <div v-else class="table-wrap">
       <table>
         <thead><tr><th>품목</th><th>수량</th><th>신청일</th><th>상태</th><th>작업</th></tr></thead>

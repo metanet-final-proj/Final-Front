@@ -23,8 +23,15 @@ const props = defineProps({
 
 const emit = defineEmits(['edit', 'cancel'])
 const visibleReservations = computed(() => props.reservations.filter((reservation) => (
-  reservation?.reservationId && !isCancelled(reservation)
+  reservation?.reservationId && !isPastReservation(reservation)
 )))
+
+function isPastReservation(reservation) {
+  const boundary = reservation.endAt || reservation.startAt
+  if (!boundary) return false
+  const date = new Date(boundary)
+  return !Number.isNaN(date.getTime()) && date.getTime() <= Date.now()
+}
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -101,7 +108,7 @@ const actionResultPresentation = computed(() => {
     />
 
     <p v-if="visibleReservations.length === 0" class="reservation-list-empty">
-      변경하거나 취소할 수 있는 회의실 예약이 없습니다.
+      표시할 회의실 예약 내역이 없습니다.
     </p>
 
     <div v-else class="reservation-list-table-wrap">

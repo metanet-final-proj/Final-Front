@@ -168,12 +168,34 @@ const autoFollowThread = ref(true)
 const chatDataReady = ref(false)
 
 const THREAD_BOTTOM_THRESHOLD_PX = 72
+const COMPOSER_MAX_LINES = 3
+const SCROLL_HEIGHT_TOLERANCE_PX = 1
+const VOICE_RECORDING_LIMIT_SECONDS = 60
 
 let mediaRecorder = null
 let mediaStream = null
 let audioChunks = []
 let recordingTimer = null
+let recordingElapsedTimer = null
 let lastThreadScrollTop = 0
+let threadMutationObserver = null
+let threadResizeObserver = null
+let threadUserScrollIntentUntil = 0
+const recordingElapsedSeconds = ref(0)
+
+const formatVoiceDuration = (seconds) => {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`
+}
+
+const voiceStatusText = computed(() => {
+  if (isRecording.value) {
+    return `녹음 중 ${formatVoiceDuration(recordingElapsedSeconds.value)} · 마이크를 다시 누르면 입력됩니다. (최대 ${VOICE_RECORDING_LIMIT_SECONDS}초)`
+  }
+  if (isTranscribing.value) return '녹음을 마쳤습니다. 음성을 텍스트로 변환하는 중입니다.'
+  return ''
+})
 
 const resizeComposer = async () => {
   await nextTick()
@@ -181,15 +203,35 @@ const resizeComposer = async () => {
   const textarea = composerInputRef.value
   if (!textarea) return
 
-  const maxHeight = 80
-
   textarea.style.height = 'auto'
-  textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`
-  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+
+  const styles = window.getComputedStyle(textarea)
+  const toPixels = (value) => Number.parseFloat(value) || 0
+  const lineHeight = toPixels(styles.lineHeight) || 22
+  const verticalPadding = toPixels(styles.paddingTop) + toPixels(styles.paddingBottom)
+  const verticalBorder = toPixels(styles.borderTopWidth) + toPixels(styles.borderBottomWidth)
+  const maxHeight = Math.ceil(
+    lineHeight * COMPOSER_MAX_LINES + verticalPadding + verticalBorder,
+  )
+  const contentHeight = textarea.scrollHeight + verticalBorder
+
+  textarea.style.height = `${Math.min(contentHeight, maxHeight)}px`
+  textarea.style.overflowY =
+    contentHeight > maxHeight + SCROLL_HEIGHT_TOLERANCE_PX ? 'auto' : 'hidden'
 }
 
 watch(
   draft,
+  () => {
+    resizeComposer()
+  },
+  {
+    flush: 'post',
+  },
+)
+
+watch(
+  composerInputRef,
   () => {
     resizeComposer()
   },
@@ -408,11 +450,15 @@ const handleThreadScroll = () => {
   const scrollTopChanged = Math.abs(thread.scrollTop - lastThreadScrollTop) > 1
   lastThreadScrollTop = thread.scrollTop
 
-  // Streaming can change the scroll container's height and emit a scroll event
-  // without any user movement. Only release auto-follow when the position moved.
-  if (!scrollTopChanged) return
+  // Layout changes can move the scroll position through browser scroll anchoring.
+  // Only explicit wheel/touch/scrollbar interaction may release auto-follow.
+  if (!scrollTopChanged || window.performance.now() > threadUserScrollIntentUntil) return
 
   autoFollowThread.value = isThreadNearBottom()
+}
+
+const markThreadScrollIntent = () => {
+  threadUserScrollIntentUntil = window.performance.now() + 500
 }
 
 const scrollThread = async ({ force = false } = {}) => {
@@ -441,6 +487,11 @@ const cleanupVoiceRecording = () => {
   if (recordingTimer) {
     window.clearTimeout(recordingTimer)
     recordingTimer = null
+  }
+
+  if (recordingElapsedTimer) {
+    window.clearInterval(recordingElapsedTimer)
+    recordingElapsedTimer = null
   }
 
   if (mediaStream) {
@@ -534,7 +585,17 @@ const startVoiceRecording = async () => {
 
     mediaRecorder.start()
     isRecording.value = true
-    recordingTimer = window.setTimeout(stopVoiceRecording, 60 * 1000)
+    recordingElapsedSeconds.value = 0
+    recordingElapsedTimer = window.setInterval(() => {
+      recordingElapsedSeconds.value = Math.min(
+        recordingElapsedSeconds.value + 1,
+        VOICE_RECORDING_LIMIT_SECONDS,
+      )
+    }, 1000)
+    recordingTimer = window.setTimeout(
+      stopVoiceRecording,
+      VOICE_RECORDING_LIMIT_SECONDS * 1000,
+    )
   } catch (error) {
     console.error('Voice recording failed:', error)
     cleanupVoiceRecording()
@@ -561,6 +622,50 @@ const requestScrollThread = () => {
     await scrollThread()
   })
 }
+
+const observeThreadContent = () => {
+  threadMutationObserver?.disconnect()
+  threadResizeObserver?.disconnect()
+  threadMutationObserver = null
+  threadResizeObserver = null
+
+  if (!threadRef.value) return
+
+  if (typeof ResizeObserver !== 'undefined') {
+    threadResizeObserver = new ResizeObserver(() => {
+      requestScrollThread()
+    })
+  }
+
+  const observeMessageRows = () => {
+    if (!threadResizeObserver || !threadRef.value) return
+    Array.from(threadRef.value.children).forEach((element) => {
+      threadResizeObserver.observe(element)
+    })
+  }
+
+  observeMessageRows()
+
+  if (typeof MutationObserver === 'undefined') return
+
+  threadMutationObserver = new MutationObserver(() => {
+    observeMessageRows()
+    requestScrollThread()
+  })
+  threadMutationObserver.observe(threadRef.value, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  })
+}
+
+watch(
+  threadRef,
+  () => {
+    observeThreadContent()
+  },
+  { flush: 'post' },
+)
 
 const conversationRouteLocation = (conversationId = null, query = route.query) => ({
   name: 'chat',
@@ -861,13 +966,23 @@ const confirmActionDraft = async (payload) => {
       await refreshWorkhubSidebar()
     }
   } catch (error) {
+    const status = Number(error.response?.status || error.status || 0)
+    const code =
+      error.response?.data?.code ||
+      error.response?.data?.error?.code ||
+      ''
     const message =
       error.response?.data?.message ||
       error.response?.data?.error?.message ||
       '요청 처리에 실패했습니다. 입력 내용을 확인한 뒤 다시 시도해 주세요.'
     actionDraftErrors.value = {
       ...actionDraftErrors.value,
-      [payload.draftId]: message,
+      [payload.draftId]: {
+        message,
+        status,
+        code,
+        tone: status === 409 ? 'rejected' : 'error',
+      },
     }
   } finally {
     confirmingActionDraftId.value = null
@@ -1053,6 +1168,21 @@ const runPanelAction = async () => {
   }
 }
 
+const runPanelManageAction = async () => {
+  if (!currentPanel.value?.manageActionQuery || businessActionLoading.value) return
+
+  businessActionLoading.value = true
+  try {
+    const query = currentPanel.value.manageActionQuery
+    closePanel()
+    await sendMessage(query)
+  } catch (error) {
+    console.error('Failed to run panel management action:', error)
+  } finally {
+    businessActionLoading.value = false
+  }
+}
+
 const toggleDarkMode = () => {
   isDarkMode.value = !isDarkMode.value
 }
@@ -1210,6 +1340,9 @@ onBeforeUnmount(() => {
   if (scrollAnimationFrameId) {
     window.cancelAnimationFrame(scrollAnimationFrameId)
   }
+
+  threadMutationObserver?.disconnect()
+  threadResizeObserver?.disconnect()
 })
 </script>
 
@@ -1279,7 +1412,8 @@ onBeforeUnmount(() => {
           class="voice-button"
           :class="{ recording: isRecording, transcribing: isTranscribing }"
           :disabled="isAnswering || isTranscribing || !isVoiceSupported"
-          :title="isRecording ? '녹음 중지' : '음성으로 입력'"
+          :title="isRecording ? '녹음을 마치고 입력하기' : '음성으로 입력'"
+          :aria-label="isRecording ? '녹음을 마치고 입력하기' : '음성으로 입력'"
           @click="toggleVoiceRecording"
         >
           <svg
@@ -1302,8 +1436,8 @@ onBeforeUnmount(() => {
           ref="composerInputRef"
           v-model="draft"
           rows="1"
-          :disabled="isTranscribing"
-          :placeholder="isTranscribing ? '음성을 텍스트로 변환하는 중입니다.' : isAnswering ? '답변 생성 중입니다.' : '업무 요청을 입력해 주세요.'"
+          :disabled="isRecording || isTranscribing"
+          :placeholder="isRecording ? '녹음 중입니다. 마이크를 다시 누르면 입력됩니다.' : isTranscribing ? '음성을 텍스트로 변환하는 중입니다.' : isAnswering ? '답변 생성 중입니다.' : '업무 요청을 입력해 주세요.'"
           @input="resizeComposer"
           @keydown="handleComposerKeydown"
         ></textarea>
@@ -1311,7 +1445,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           aria-label="메시지 전송"
-          :disabled="isAnswering || isTranscribing"
+          :disabled="isAnswering || isRecording || isTranscribing"
           @click="sendMessage()"
           class="send-button"
         >
@@ -1332,6 +1466,10 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
+      <p v-if="voiceStatusText" class="voice-status" role="status" aria-live="polite">
+        {{ voiceStatusText }}
+      </p>
+
       <div class="start-chip-list">
         <button
           v-for="card in starterCards"
@@ -1347,7 +1485,14 @@ onBeforeUnmount(() => {
   </template>
 
   <template v-else>
-    <section ref="threadRef" class="thread-area" @scroll.passive="handleThreadScroll">
+    <section
+      ref="threadRef"
+      class="thread-area"
+      @scroll.passive="handleThreadScroll"
+      @wheel.passive="markThreadScrollIntent"
+      @touchmove.passive="markThreadScrollIntent"
+      @pointerdown.self="markThreadScrollIntent"
+    >
       <div v-if="chatStore.messagesLoading" class="message-loading">
         이전 메시지를 불러오는 중입니다.
       </div>
@@ -1450,7 +1595,12 @@ onBeforeUnmount(() => {
                       alt=""
                     />
                     <div class="agent-step-body">
-                      <p>{{ step.title }}</p>
+                      <p>
+                        {{ step.title }}
+                        <span v-if="step.repeatCount > 1" class="agent-step-repeat">
+                          ({{ step.repeatCount }})
+                        </span>
+                      </p>
                       <span v-if="step.tool">{{ step.tool }}</span>
                     </div>
                   </div>
@@ -1578,7 +1728,8 @@ onBeforeUnmount(() => {
           class="voice-button"
           :class="{ recording: isRecording, transcribing: isTranscribing }"
           :disabled="isAnswering || isTranscribing || !isVoiceSupported"
-          :title="isRecording ? '녹음 중지' : '음성으로 입력'"
+          :title="isRecording ? '녹음을 마치고 입력하기' : '음성으로 입력'"
+          :aria-label="isRecording ? '녹음을 마치고 입력하기' : '음성으로 입력'"
           @click="toggleVoiceRecording"
         >
           <svg
@@ -1601,8 +1752,8 @@ onBeforeUnmount(() => {
           ref="composerInputRef"
           v-model="draft"
           rows="1"
-          :disabled="isTranscribing"
-          :placeholder="isTranscribing ? '음성을 텍스트로 변환하는 중입니다.' : isAnswering ? '답변 생성 중입니다.' : '채팅을 입력해 주세요.'"
+          :disabled="isRecording || isTranscribing"
+          :placeholder="isRecording ? '녹음 중입니다. 마이크를 다시 누르면 입력됩니다.' : isTranscribing ? '음성을 텍스트로 변환하는 중입니다.' : isAnswering ? '답변 생성 중입니다.' : '채팅을 입력해 주세요.'"
           @input="resizeComposer"
           @keydown="handleComposerKeydown"
         ></textarea>
@@ -1610,7 +1761,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           aria-label="메시지 전송"
-          :disabled="isAnswering || isTranscribing"
+          :disabled="isAnswering || isRecording || isTranscribing"
           @click="sendMessage()"
           class="send-button"
         >
@@ -1631,6 +1782,10 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
+      <p v-if="voiceStatusText" class="voice-status" role="status" aria-live="polite">
+        {{ voiceStatusText }}
+      </p>
+
       <p>AI가 생성한 답변은 참고용으로 활용해 주세요.</p>
     </section>
   </template>
@@ -1641,6 +1796,7 @@ onBeforeUnmount(() => {
         :panel="currentPanel"
         :action-loading="businessActionLoading"
         @action="runPanelAction"
+        @manage="runPanelManageAction"
         @close="closePanelAndRestoreFocus"
       />
     </div>
@@ -1795,7 +1951,7 @@ onBeforeUnmount(() => {
   line-height: 20px;
   padding: 6px 0 14px;
   resize: none;
-  overflow-y: auto;
+  overflow-y: hidden;
   box-sizing: border-box;
   font-family: inherit;
   appearance: none;
@@ -2371,7 +2527,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   height: 40px;
   min-height: 40px;
-  max-height: 80px;
+  max-height: 86px;
   border: none;
   outline: none;
   background: transparent;
@@ -2380,7 +2536,7 @@ onBeforeUnmount(() => {
   line-height: 22px;
   padding: 6px 0 14px;
   resize: none;
-  overflow-y: auto;
+  overflow-y: hidden;
   box-sizing: border-box;
   font-family: inherit;
   appearance: none;
@@ -2471,6 +2627,20 @@ onBeforeUnmount(() => {
   text-align: center;
   font-size: 11px;
   color: var(--color-placeholder);
+}
+
+.start-screen > .voice-status,
+.composer-area .voice-status {
+  color: var(--color-recording);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.start-screen > .voice-status {
+  width: min(720px, 100%);
+  margin: 8px 0 0;
+  text-align: center;
 }
 
 @media (max-width: 1100px) {
@@ -2595,6 +2765,6 @@ onBeforeUnmount(() => {
 
   .thread-area {
     padding: 16px 14px;
-  }
+                                             }
 }
 </style>

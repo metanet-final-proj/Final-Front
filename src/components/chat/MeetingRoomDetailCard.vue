@@ -72,7 +72,7 @@ const completionPresentation = computed(() => {
 
 <template>
   <section class="meeting-detail-card">
-    <header><strong>{{ data.roomName || '회의실 상세' }}</strong><span>{{ data.capacity ? `${data.capacity}명` : '' }}</span></header>
+    <header><strong>{{ data.roomName || '회의실 상세' }}</strong><span>{{ data.capacity ? `정원 ${data.capacity}명` : '' }}</span></header>
     <dl>
       <div><dt>위치</dt><dd>{{ locationText }}</dd></div>
       <div><dt>장비</dt><dd>{{ equipmentText || '-' }}</dd></div>

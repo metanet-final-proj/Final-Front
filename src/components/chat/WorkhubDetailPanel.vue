@@ -12,7 +12,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['action', 'close'])
+const emit = defineEmits(['action', 'close', 'manage'])
 
 const isMobile = ref(false)
 const panelRef = ref(null)
@@ -21,6 +21,7 @@ let mobileMediaQuery = null
 
 const panelItems = computed(() => props.panel?.items || [])
 const isMenuPanel = computed(() => props.panel?.key === 'menu')
+const hasManageAction = computed(() => Boolean(props.panel?.manageActionQuery))
 const panelTitleId = computed(() => `workhub-panel-${props.panel?.key || 'detail'}-title`)
 
 const parseMealMenus = (description = '') => {
@@ -174,7 +175,17 @@ onBeforeUnmount(() => {
 
         <div class="detail-footer">
           <button
+            v-if="hasManageAction"
             type="button"
+            class="secondary"
+            :disabled="actionLoading"
+            @click="emit('manage')"
+          >
+            {{ panel.manageActionLabel }}
+          </button>
+          <button
+            type="button"
+            class="primary"
             :disabled="actionLoading"
             @click="emit('action')"
           >
@@ -411,6 +422,8 @@ onBeforeUnmount(() => {
 
 .detail-footer {
   flex-shrink: 0;
+  display: grid;
+  gap: 8px;
   padding: 14px 18px 18px;
   border-top: 1px solid var(--color-border-light);
   background: var(--color-surface-raised);
@@ -419,16 +432,32 @@ onBeforeUnmount(() => {
 .detail-footer button {
   width: 100%;
   border: none;
-  background: var(--color-primary-light);
-  color: var(--color-white);
+  border: 1px solid transparent;
   font-size: 13.5px;
   font-weight: 700;
   border-radius: 11px;
   padding: 12px;
 }
 
-.detail-footer button:hover:not(:disabled) {
+.detail-footer .primary {
+  background: var(--color-primary-light);
+  color: var(--color-white);
+}
+
+.detail-footer .secondary {
+  border-color: var(--color-primary-border-muted);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.detail-footer .primary:hover:not(:disabled) {
   background: var(--color-primary);
+}
+
+.detail-footer .secondary:hover:not(:disabled) {
+  border-color: var(--color-primary-light);
+  background: var(--color-surface-hover);
+  color: var(--color-primary-light);
 }
 
 .detail-footer button:disabled {
