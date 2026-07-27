@@ -6,7 +6,7 @@ import loginIcon2 from '../../assets/images/officelink-logo-title-wide3.svg'
 const loading = ref(false)
 const error = ref('')
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || ''
 
 const loginWithAzure = () => {
   if (loading.value) return

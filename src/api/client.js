@@ -10,7 +10,7 @@ const viteEnv = import.meta.env || {}
 const apiClient = axios.create({
   baseURL: viteEnv.DEV
     ? ''
-    : viteEnv.VITE_API_BASE_URL || 'http://localhost:8080',
+    : viteEnv.VITE_API_BASE_URL || '',
   headers: {
     'Content-Type': 'application/json',
   },
