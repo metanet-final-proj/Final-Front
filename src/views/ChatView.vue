@@ -16,13 +16,11 @@ import AdminDashboardPanel from '../components/admin/AdminDashboardPanel.vue'
 import ChatSidebar from '../components/chat/ChatSidebar.vue'
 import WorkhubDetailPanel from '../components/chat/WorkhubDetailPanel.vue'
 import MyPagePanel from '../components/mypage/MyPagePanel.vue'
-import ActionDraftCard from '../components/chat/ActionDraftCard.vue'
+import ActionDraftRenderer from '../components/chat/ActionDraftRenderer.vue'
 import MeetingReservationListCard from '../components/chat/MeetingReservationListCard.vue'
 import MeetingRoomAvailableListCard from '../components/chat/MeetingRoomAvailableListCard.vue'
 import MeetingRoomDetailCard from '../components/chat/MeetingRoomDetailCard.vue'
-import VisitorParkingActionDraftCard from '../components/chat/VisitorParkingActionDraftCard.vue'
 import VisitorParkingRegistrationListCard from '../components/chat/VisitorParkingRegistrationListCard.vue'
-import SupplyActionDraftCard from '../components/chat/SupplyActionDraftCard.vue'
 import SupplyItemListCard from '../components/chat/SupplyItemListCard.vue'
 import SupplyRequestListCard from '../components/chat/SupplyRequestListCard.vue'
 
@@ -1067,11 +1065,18 @@ const prepareVisitorParkingAction = async (message, actionType, registration) =>
   }, registration.requestId)
 }
 
-const isVisitorParkingActionDraft = (draft) => (
-  String(draft?.actionType || '').startsWith('visitor_parking.')
-)
-
-const isSupplyActionDraft = (draft) => String(draft?.actionType || '').startsWith('supply.')
+const shouldRenderActionDraft = (message) => {
+  const draft = message?.actionDraft
+  if (!draft) return false
+  if (!String(draft.actionType || '').startsWith('meeting_room.')) return true
+  return (
+    (!message.meetingRoomAvailableList && !message.meetingRoomDetail)
+    || (
+      draft.values?.origin === 'meeting_room_query_card'
+      && String(draft.status || '').toUpperCase() !== 'COMPLETED'
+    )
+  )
+}
 
 const createSupplyDraft = async (message, actionType, values, loadingId = null) => {
   if (!message?.id || preparingSupplyRequestId.value) return
@@ -1618,26 +1623,8 @@ onBeforeUnmount(() => {
                 v-html="message.isLoading ? message.text : renderMarkdown(message.text)"
               ></div>
 
-              <ActionDraftCard
-                v-if="message.actionDraft && !isVisitorParkingActionDraft(message.actionDraft) && !isSupplyActionDraft(message.actionDraft) && ((!message.meetingRoomAvailableList && !message.meetingRoomDetail) || (message.actionDraft.values?.origin === 'meeting_room_query_card' && String(message.actionDraft.status || '').toUpperCase() !== 'COMPLETED'))"
-                :draft="message.actionDraft"
-                :loading="confirmingActionDraftId === message.actionDraft.draftId"
-                :external-error="actionDraftErrors[message.actionDraft.draftId] || ''"
-                @confirm="confirmActionDraft"
-                @dismiss="(draft) => dismissListActionDraft(message, draft)"
-              />
-
-              <VisitorParkingActionDraftCard
-                v-if="message.actionDraft && isVisitorParkingActionDraft(message.actionDraft)"
-                :draft="message.actionDraft"
-                :loading="confirmingActionDraftId === message.actionDraft.draftId"
-                :external-error="actionDraftErrors[message.actionDraft.draftId] || ''"
-                @confirm="confirmActionDraft"
-                @dismiss="(draft) => dismissListActionDraft(message, draft)"
-              />
-
-              <SupplyActionDraftCard
-                v-if="message.actionDraft && isSupplyActionDraft(message.actionDraft)"
+              <ActionDraftRenderer
+                v-if="shouldRenderActionDraft(message)"
                 :draft="message.actionDraft"
                 :loading="confirmingActionDraftId === message.actionDraft.draftId"
                 :external-error="actionDraftErrors[message.actionDraft.draftId] || ''"

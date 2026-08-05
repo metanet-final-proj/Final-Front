@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { workhubApi } from '../../api/workhubApi'
+import ActionDraftContainer from './ActionDraftContainer.vue'
 import ActionResultCallout from './ActionResultCallout.vue'
 
 const props = defineProps({
@@ -419,18 +420,17 @@ const quickConfirm = () => {
     :presentation="completionPresentation"
   />
 
-  <Teleport to="body">
-    <div v-if="isOpen" class="action-modal-backdrop" @mousedown.self="closeForm">
-      <section class="action-modal" role="dialog" aria-modal="true" aria-labelledby="meeting-action-title">
-        <header>
-          <div>
-            <span>최종 확인</span>
-            <h2 id="meeting-action-title">{{ actionLabel }}</h2>
-          </div>
-          <button type="button" class="action-modal-close" :disabled="executing" aria-label="닫기" @click="closeForm">×</button>
-        </header>
-
-        <form @submit.prevent="confirm">
+  <ActionDraftContainer
+    :open="isOpen"
+    :title="actionLabel"
+    title-id="meeting-action-title"
+    :executing="executing"
+    :confirm-disabled="!canConfirm"
+    :confirm-label="executing ? `${actionVerb} 처리 중...` : `이 내용으로 ${actionVerb}`"
+    @close="closeForm"
+    @confirm="confirm"
+  >
+    <div class="meeting-action-form">
           <div v-if="isCancellation" class="action-cancel-summary">
             <strong>{{ form.roomName || '회의실 예약' }}</strong>
             <span v-if="form.date">{{ form.date }} {{ form.startTime }} - {{ form.endTime }}</span>
@@ -528,17 +528,9 @@ const quickConfirm = () => {
             v-if="errorPresentation"
             :presentation="errorPresentation"
           />
-
-          <footer>
-            <button type="button" class="action-secondary" :disabled="executing" @click="closeForm">닫기</button>
-            <button type="submit" class="action-primary" :disabled="!canConfirm">
-              {{ executing ? `${actionVerb} 처리 중...` : `이 내용으로 ${actionVerb}` }}
-            </button>
-          </footer>
-        </form>
-      </section>
     </div>
-  </Teleport>
+
+  </ActionDraftContainer>
 </template>
 
 <style scoped>
@@ -632,38 +624,7 @@ const quickConfirm = () => {
 .quick-action-buttons { justify-content: flex-end; }
 .quick-action-buttons .action-secondary { background: var(--color-surface-raised); }
 
-.action-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background: rgba(15, 23, 42, 0.42);
-}
-
-.action-modal {
-  width: min(520px, 100%);
-  max-height: calc(100vh - 40px);
-  overflow: auto;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-surface-raised);
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
-}
-
-.action-modal header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.action-modal header span { color: var(--color-primary); font-size: 11px; font-weight: 700; }
-.action-modal h2 { margin: 4px 0 0; color: var(--color-text); font-size: 18px; letter-spacing: 0; }
-.action-modal-close { border: 0; background: transparent; color: var(--color-subtle); font-size: 24px; line-height: 1; }
-.action-modal form { padding: 18px 20px 0; }
+.meeting-action-form { padding: 18px 20px; }
 
 .action-form-grid {
   display: grid;
@@ -710,7 +671,6 @@ const quickConfirm = () => {
 .action-cancel-summary strong { font-size: 14px; }
 .action-cancel-summary p { margin: 3px 0 0; color: var(--color-subtle); font-size: 12px; }
 
-.action-modal footer { display: flex; justify-content: flex-end; gap: 8px; margin: 20px -20px 0; padding: 14px 20px 18px; border-top: 1px solid var(--color-border-light); }
 .action-secondary,
 .action-primary { min-height: 38px; border-radius: 6px; padding: 0 15px; font-size: 13px; font-weight: 700; }
 .action-secondary { border: 1px solid var(--color-border); background: var(--color-surface-raised); color: var(--color-text); }
@@ -723,7 +683,5 @@ const quickConfirm = () => {
   .quick-action-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .quick-action-buttons { align-items: stretch; flex-direction: column-reverse; }
   .quick-action-buttons button { width: 100%; }
-  .action-modal-backdrop { align-items: end; padding: 0; }
-  .action-modal { width: 100%; max-height: 92vh; border-radius: 8px 8px 0 0; }
 }
 </style>
