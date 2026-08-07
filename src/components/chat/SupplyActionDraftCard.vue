@@ -1,6 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { workhubApi } from '../../api/workhubApi'
+import ActionDraftContainer from './ActionDraftContainer.vue'
 import ActionResultCallout from './ActionResultCallout.vue'
 
 const props = defineProps({
@@ -308,14 +309,17 @@ watch(() => props.draft?.draftId, () => {
   </section>
   <ActionResultCallout v-if="completed && !fromList" :presentation="completionPresentation" />
 
-  <Teleport to="body">
-    <div v-if="isOpen" class="modal-backdrop" @mousedown.self="closeForm">
-      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="supply-action-title">
-        <header>
-          <div><span>최종 확인</span><h2 id="supply-action-title">{{ actionLabel }}</h2></div>
-          <button type="button" class="close" aria-label="닫기" :disabled="executing" @click="closeForm">×</button>
-        </header>
-
+  <ActionDraftContainer
+    :open="isOpen"
+    :title="actionLabel"
+    title-id="supply-action-title"
+    :executing="executing"
+    :confirm-disabled="!canConfirm"
+    :confirm-label="executing ? '처리 중...' : confirmLabel"
+    width="680px"
+    @close="closeForm"
+    @confirm="confirm"
+  >
         <div class="form-grid">
           <div class="item-list">
             <div v-for="(row, rowIndex) in form.rows" :key="row.rowId" class="item-row">
@@ -373,15 +377,7 @@ watch(() => props.draft?.draftId, () => {
           <ActionResultCallout v-if="errorPresentation" :presentation="errorPresentation" compact />
         </div>
 
-        <footer>
-          <button type="button" class="secondary" :disabled="executing" @click="closeForm">닫기</button>
-          <button type="button" class="primary" :disabled="!canConfirm" @click="confirm">
-            {{ executing ? '처리 중...' : confirmLabel }}
-          </button>
-        </footer>
-      </section>
-    </div>
-  </Teleport>
+  </ActionDraftContainer>
 </template>
 
 <style scoped>
@@ -406,12 +402,6 @@ watch(() => props.draft?.draftId, () => {
 .supply-quick-buttons .primary { border: 1px solid var(--color-primary); background: var(--color-primary); color: var(--color-white); }
 .primary { border: 1px solid var(--color-primary); border-radius: 6px; background: var(--color-primary); color: var(--color-white); font-weight: 700; cursor: pointer; }
 button:disabled { cursor: default; opacity: .55; }
-.modal-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .42); }
-.modal { width: min(680px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface-raised); box-shadow: 0 18px 48px rgba(15, 23, 42, .22); }
-.modal header { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 20px 14px; border-bottom: 1px solid var(--color-border-light); }
-.modal header span { color: var(--color-primary); font-size: 11px; font-weight: 700; }
-.modal h2 { margin: 4px 0 0; color: var(--color-text); font-size: 18px; letter-spacing: 0; }
-.close { border: 0; background: transparent; color: var(--color-subtle); font-size: 24px; line-height: 1; cursor: pointer; }
 .form-grid { display: grid; grid-template-columns: 1fr 130px; gap: 14px; padding: 18px 20px; }
 .item-list { grid-column: 1 / -1; display: grid; gap: 12px; }
 .item-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; align-items: end; gap: 12px; }
@@ -426,8 +416,6 @@ textarea { resize: vertical; }
 .add-item { justify-self: start; min-height: 34px; padding: 0 12px; border: 1px dashed var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-primary); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .add-item span { margin-left: 5px; color: var(--color-subtle); font-weight: 500; }
 .remove-item { min-height: 38px; padding: 0 11px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface-raised); color: var(--color-danger); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
-.modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid var(--color-border-light); }
-.modal footer button { min-height: 38px; padding: 0 15px; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 700; }
 .secondary { border: 1px solid var(--color-border); background: var(--color-surface-raised); color: var(--color-text); }
-@media (max-width: 620px) { .supply-quick-item { grid-template-columns: repeat(2, minmax(0, 1fr)); } .supply-quick-item-name { grid-column: 1 / -1; } .supply-quick-buttons { align-items: stretch; flex-direction: column-reverse; } .supply-quick-buttons button { width: 100%; } .modal-backdrop { align-items: end; padding: 0; } .modal { width: 100%; max-height: 92vh; border-radius: 8px 8px 0 0; } .form-grid { grid-template-columns: 1fr; padding: 16px 20px; } .item-row { grid-template-columns: minmax(0, 1fr) 100px; } .remove-item { grid-column: 1 / -1; justify-self: end; min-height: 32px; } .wide, .form-error, .form-note { grid-column: 1; } }
+@media (max-width: 620px) { .supply-quick-item { grid-template-columns: repeat(2, minmax(0, 1fr)); } .supply-quick-item-name { grid-column: 1 / -1; } .supply-quick-buttons { align-items: stretch; flex-direction: column-reverse; } .supply-quick-buttons button { width: 100%; } .form-grid { grid-template-columns: 1fr; padding: 16px 20px; } .item-row { grid-template-columns: minmax(0, 1fr) 100px; } .remove-item { grid-column: 1 / -1; justify-self: end; min-height: 32px; } .wide, .form-error, .form-note { grid-column: 1; } }
 </style>
