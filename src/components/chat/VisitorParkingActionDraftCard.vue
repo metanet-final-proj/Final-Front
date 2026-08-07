@@ -1,6 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { workhubApi } from '../../api/workhubApi'
+import ActionDraftContainer from './ActionDraftContainer.vue'
 import ActionResultCallout from './ActionResultCallout.vue'
 
 const props = defineProps({
@@ -260,17 +261,16 @@ watch(
     :presentation="completionPresentation"
   />
 
-  <Teleport to="body">
-    <div v-if="isOpen" class="parking-modal-backdrop" @mousedown.self="closeForm">
-      <section class="parking-modal" role="dialog" aria-modal="true" aria-labelledby="parking-action-title">
-        <header>
-          <div>
-            <span>최종 확인</span>
-            <h2 id="parking-action-title">{{ actionLabel }}</h2>
-          </div>
-          <button type="button" aria-label="닫기" :disabled="executing" @click="closeForm">×</button>
-        </header>
-
+  <ActionDraftContainer
+    :open="isOpen"
+    :title="actionLabel"
+    title-id="parking-action-title"
+    :executing="executing"
+    :confirm-disabled="!canConfirm"
+    :confirm-label="executing ? '처리 중...' : confirmLabel"
+    @close="closeForm"
+    @confirm="confirm"
+  >
         <div class="parking-form">
           <label>
             <span>방문 날짜</span>
@@ -323,15 +323,7 @@ watch(
           </p>
         </div>
 
-        <footer>
-          <button type="button" class="secondary" :disabled="executing" @click="closeForm">닫기</button>
-          <button type="button" class="primary" :disabled="!canConfirm" @click="confirm">
-            {{ executing ? '처리 중...' : confirmLabel }}
-          </button>
-        </footer>
-      </section>
-    </div>
-  </Teleport>
+  </ActionDraftContainer>
 </template>
 
 <style scoped>
@@ -354,12 +346,6 @@ watch(
 .parking-quick-buttons .secondary { border: 1px solid var(--color-border); background: var(--color-surface-raised); color: var(--color-text); }
 .parking-quick-buttons .primary { border: 1px solid var(--color-primary); background: var(--color-primary); color: var(--color-white); }
 .parking-quick-buttons button:disabled { cursor: default; opacity: .55; }
-.parking-modal-backdrop { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 20px; background: rgba(15, 23, 42, .42); }
-.parking-modal { width: min(520px, 100%); max-height: calc(100vh - 40px); overflow: auto; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface-raised); box-shadow: 0 18px 48px rgba(15, 23, 42, .22); }
-.parking-modal header { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 20px 14px; border-bottom: 1px solid var(--color-border-light); }
-.parking-modal header span { color: var(--color-primary); font-size: 11px; font-weight: 700; }
-.parking-modal h2 { margin: 4px 0 0; font-size: 18px; letter-spacing: 0; }
-.parking-modal header button { border: 0; background: transparent; color: var(--color-subtle); font-size: 24px; cursor: pointer; }
 .parking-form { display: grid; gap: 14px; padding: 18px 20px; }
 .parking-form label { display: grid; gap: 6px; color: var(--color-text); font-size: 12px; font-weight: 700; }
 .parking-form label em { color: var(--color-subtle); font-size: 10px; font-style: normal; font-weight: 500; }
@@ -368,16 +354,9 @@ watch(
 .parking-form small { color: var(--color-subtle); font-weight: 500; }
 .parking-error { margin: 0; color: var(--color-danger); font-size: 12px; }
 .parking-notice { margin: 0; color: var(--color-subtle); font-size: 12px; }
-.parking-modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid var(--color-border-light); }
-.parking-modal footer button { min-height: 38px; padding: 0 15px; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-.parking-modal footer .secondary { border: 1px solid var(--color-border); background: var(--color-surface-raised); color: var(--color-text); }
-.parking-modal footer .primary { border: 1px solid var(--color-primary); background: var(--color-primary); color: var(--color-white); }
-.parking-modal footer button:disabled { cursor: default; opacity: .55; }
 @media (max-width: 560px) {
   .parking-quick-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .parking-quick-buttons { align-items: stretch; flex-direction: column-reverse; }
   .parking-quick-buttons button { width: 100%; }
-  .parking-modal-backdrop { align-items: end; padding: 0; }
-  .parking-modal { width: 100%; max-height: 92vh; border-radius: 8px 8px 0 0; }
 }
 </style>
