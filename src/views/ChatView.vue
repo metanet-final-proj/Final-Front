@@ -8,8 +8,6 @@ import loadingIcon from '../assets/images/loading.svg'
 import checkAllIcon from '../assets/images/check-all.svg'
 import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
-import MarkdownIt from 'markdown-it'
-import DOMPurify from 'dompurify'
 import { useWorkhubStore } from '../stores/workhubStore'
 import { speechApi } from '../api/speechApi'
 import AdminDashboardPanel from '../components/admin/AdminDashboardPanel.vue'
@@ -25,6 +23,15 @@ import VisitorParkingRegistrationListCard from '../components/chat/VisitorParkin
 import SupplyActionDraftCard from '../components/chat/SupplyActionDraftCard.vue'
 import SupplyItemListCard from '../components/chat/SupplyItemListCard.vue'
 import SupplyRequestListCard from '../components/chat/SupplyRequestListCard.vue'
+import {
+  ADMIN_DASHBOARD_PERMISSION,
+  MAIN_PANEL,
+  applyTheme,
+  getInitialDarkMode,
+  getPanelFromRoute,
+  panelRouteLocation,
+  renderMarkdown,
+} from '../utils/chatView'
 
 const router = useRouter()
 const route = useRoute()
@@ -32,96 +39,15 @@ const authStore = useAuthStore()
 const chatStore = useChatStore()
 const workhubStore = useWorkhubStore()
 
-const markdown = new MarkdownIt({
-  html: false,
-  linkify: true,
-  breaks: true,
-})
-
-const THEME_STORAGE_KEY = 'officeLinkTheme'
-
-const getInitialDarkMode = () => {
-  if (typeof window === 'undefined') return false
-
-  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
-
-  if (storedTheme === 'dark') return true
-  if (storedTheme === 'light') return false
-
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches || false
-}
-
-const applyTheme = (darkMode) => {
-  if (typeof document === 'undefined') return
-
-  const theme = darkMode ? 'dark' : 'light'
-
-  document.documentElement.dataset.theme = theme
-  window.localStorage.setItem(THEME_STORAGE_KEY, theme)
-}
-
-const renderMarkdown = (text) => {
-  if (!text) return ''
-
-  const html = markdown.render(String(text))
-
-  return DOMPurify.sanitize(html, {
-    USE_PROFILES: {
-      html: true,
-    },
-  })
-}
-
-const MAIN_PANEL = {
-  CHAT: 'chat',
-  ADMIN: 'admin',
-  MYPAGE: 'mypage',
-}
-
-const ADMIN_DASHBOARD_PERMISSION = 'observability.dashboard.read'
-
-const PANEL_QUERY_VALUES = new Set(Object.values(MAIN_PANEL))
-const PANEL_ROUTE_NAMES = {
-  [MAIN_PANEL.MYPAGE]: 'mypage',
-  [MAIN_PANEL.ADMIN]: 'admin-dashboard',
-}
-
-const getPanelFromQuery = (panelQuery) => {
-  const rawPanel = Array.isArray(panelQuery) ? panelQuery[0] : panelQuery
-  const normalizedPanel = String(rawPanel || '').toLowerCase()
-
-  return PANEL_QUERY_VALUES.has(normalizedPanel) ? normalizedPanel : MAIN_PANEL.CHAT
-}
-
-const getPanelFromRoute = (currentRoute) => {
-  if (currentRoute.name === PANEL_ROUTE_NAMES[MAIN_PANEL.MYPAGE]) {
-    return MAIN_PANEL.MYPAGE
-  }
-
-  if (currentRoute.name === PANEL_ROUTE_NAMES[MAIN_PANEL.ADMIN]) {
-    return MAIN_PANEL.ADMIN
-  }
-
-  // Preserve old shared links that still use ?panel during the transition.
-  return getPanelFromQuery(currentRoute.query.panel)
-}
-
 const replacePanelQuery = async (panel) => {
   const currentPanel = getPanelFromRoute(route)
   if (currentPanel === panel) return
 
   if (panel !== MAIN_PANEL.CHAT) {
-    await router.replace({ name: PANEL_ROUTE_NAMES[panel] })
+    await router.replace(panelRouteLocation(panel))
     return
   }
-
-  await router.replace({
-    name: 'chat',
-    params: route.params.conversationId
-      ? { conversationId: route.params.conversationId }
-      : {},
-    query: {},
-  })
+  await router.replace(panelRouteLocation(panel, route.params.conversationId))
 }
 
 const pushPanelQuery = async (panel) => {
@@ -129,17 +55,10 @@ const pushPanelQuery = async (panel) => {
   if (currentPanel === panel) return
 
   if (panel !== MAIN_PANEL.CHAT) {
-    await router.push({ name: PANEL_ROUTE_NAMES[panel] })
+    await router.push(panelRouteLocation(panel))
     return
   }
-
-  await router.push({
-    name: 'chat',
-    params: route.params.conversationId
-      ? { conversationId: route.params.conversationId }
-      : {},
-    query: {},
-  })
+  await router.push(panelRouteLocation(panel, route.params.conversationId))
 }
 
 const draft = ref('')

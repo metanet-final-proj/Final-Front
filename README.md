@@ -1,154 +1,86 @@
-# METANET AI Assistant Frontend
+# Office-Link Frontend
 
-자연어 대화형 사내 업무지원 AI 어시스턴트 프론트엔드 프로젝트입니다.
+Office-Link Frontend는 사내 업무 요청, 구조화된 Action Draft 승인, 업무 결과와 관측 지표를 제공하는 Vue 기반 단일 페이지 애플리케이션입니다.
 
-직원이 Web Chat UI에서 자연어로 회의실 예약, 방문객 주차 등록, 구내식당 정보 확인, 비품 신청, 사내 규정 검색 등의 업무를 처리할 수 있도록 하는 것을 목표로 합니다.
+## 주요 화면과 기능
 
-## 기술 스택
+- Azure 로그인과 사용자 세션 갱신
+- 대화방 URL 라우팅, 메시지 이력, SSE 실시간 응답
+- 회의실·방문객 주차·사무용품 목록 카드와 Action Draft Form
+- 필수값 자동 추천을 포함한 빠른 실행과 최종 결과 갱신
+- 오늘의 업무 바로가기, 음성 입력, 장기 대화 UX
+- 마이페이지 사용량 차트와 관리자 관측 대시보드
+- 반응형 레이아웃, Dark mode, 사용자 조작을 존중하는 자동 스크롤
 
-- Vue 3
-- Vite
-- Vue Router
-- Pinia
-- Axios
-- JavaScript
-- CSS
+## 기술 구성
 
-## 실행 환경
+- Node.js 22
+- Vue 3, Vue Router, Pinia
+- Vite 8
+- Axios, Chart.js, markdown-it, DOMPurify
+- Nginx 1.27
 
-아래 버전 이상 사용을 권장합니다.
+## 통합 실행
 
-- Node.js 20 이상
-- npm 10 이상
-
-Node.js와 npm 버전은 아래 명령어로 확인할 수 있습니다.
-
-```bash
-node -v
-npm -v
+```powershell
+Copy-Item .\deploy\.env.example .\deploy\.env
+.\deploy\start.ps1
 ```
 
-## 프로젝트 실행 방법
+Nginx가 `http://localhost`의 단일 진입점으로 동작하며 다음 요청을 Final Backend로 프록시합니다.
 
-### 1. 저장소 클론
+- `/api/`
+- `/oauth2/`
+- `/login/oauth2/`
 
-```bash
-git clone <repository-url>
-cd workspace-Final-Front
-```
+통합 배포에서는 별도의 Frontend `.env`가 필요하지 않습니다.
 
-`<repository-url>` 부분에는 GitHub 저장소 주소를 입력합니다.
+## 로컬 개발
 
-예시:
-
-```bash
-git clone https://github.com/사용자명/레포지토리명.git
-cd workspace-Final-Front
-```
-
-### 2. 패키지 설치
-
-프로젝트 루트 경로에서 아래 명령어를 실행합니다.
-
-```bash
-npm install
-```
-
-`npm install`을 실행하면 `package.json`과 `package-lock.json`을 기준으로 프로젝트 실행에 필요한 패키지가 한 번에 설치됩니다.
-
-팀원 간 동일한 의존성 버전으로 설치하고 싶다면 아래 명령어를 사용할 수도 있습니다.
-
-```bash
+```powershell
 npm ci
-```
-
-일반 개발 환경에서는 `npm install`을 사용하면 됩니다.
-
-### 3. 개발 서버 실행
-
-```bash
 npm run dev
 ```
 
-실행 후 터미널에 표시되는 주소로 접속합니다.
+기본 개발 주소는 `http://localhost:5173`입니다. Backend 주소가 동일 origin이 아닌 경우에만 로컬 환경에서 `VITE_API_BASE_URL`을 지정합니다.
 
-기본 주소는 보통 아래와 같습니다.
+## 명령
 
-```txt
-http://localhost:5173
-```
+| 명령 | 설명 |
+| --- | --- |
+| `npm run dev` | Vite 개발 서버 실행 |
+| `npm test` | Node 기반 UI 유틸·상태 테스트 |
+| `npm run build` | Production 번들 생성 |
+| `npm run preview` | 생성된 번들 미리보기 |
 
-브라우저에서 해당 주소로 접속하면 로그인 화면을 확인할 수 있습니다.
+최종 확인:
 
-## 빌드 방법
-
-배포용 정적 파일을 생성하려면 아래 명령어를 실행합니다.
-
-```bash
+```powershell
+npm test
 npm run build
 ```
 
-빌드 결과물은 `dist/` 폴더에 생성됩니다.
+## 디렉터리
 
-## 빌드 결과 미리보기
-
-빌드된 결과물을 로컬에서 미리 실행하려면 아래 명령어를 사용합니다.
-
-```bash
-npm run preview
-```
-
-## 주요 명령어 정리
-
-| 명령어 | 설명 |
-| --- | --- |
-| `npm install` | 프로젝트 실행에 필요한 패키지를 설치합니다. |
-| `npm run dev` | 개발 서버를 실행합니다. |
-| `npm run build` | 배포용 빌드 파일을 생성합니다. |
-| `npm run preview` | 빌드된 결과물을 로컬에서 미리 확인합니다. |
-
-## 현재 구현 상태
-
-- 로그인 페이지 UI 구현
-- 로그인 버튼 클릭 시 채팅 페이지 이동
-- 채팅 메인 UI 구현
-- 채팅방 목록 표시
-- 새 대화 시작 기능
-- 사이드바 접기 / 펼치기 기능
-- 채팅방 목록 스크롤 처리
-- 업무 바로가기 패널
-- 자주 묻는 업무 빠른 질문
-- 챗봇 SVG 로고 적용
-- Mock 데이터 기반 채팅 응답 처리
-
-## 프로젝트 구조
-
-```txt
+```text
 src/
-├─ api/
-│  ├─ authApi.js
-│  ├─ chatApi.js
-│  └─ client.js
-├─ assets/
-│  └─ images/
-│     ├─ chatbot-logo.svg
-│     └─ login-logo.svg
-├─ components/
-│  ├─ chat/
-│  ├─ common/
-│  └─ login/
-├─ constants/
-├─ router/
-├─ stores/
-├─ styles/
-├─ utils/
-└─ views/
-   ├─ ChatView.vue
-   └─ LoginView.vue
+├─ api/          # Final Backend API와 SSE 클라이언트
+├─ components/   # 채팅, Action Draft, 대시보드 UI
+├─ router/       # 채팅·마이페이지·관리자 URL
+├─ stores/       # 인증·대화 상태
+├─ styles/       # 공통 테마와 반응형 스타일
+├─ utils/        # 표시값 변환과 화면 상태 유틸
+└─ views/        # 페이지 단위 화면
 ```
 
-## 참고 사항
+## 보안 메모
 
-`node_modules/`, `dist/`, `.env` 파일은 Git에 포함하지 않습니다.
+- 브라우저 번들에 API Key나 Client Secret을 넣지 않습니다.
+- 인증 Cookie는 Backend가 관리하며 API 요청은 `withCredentials`와 CSRF 계약을 따릅니다.
+- Markdown은 DOMPurify로 정제한 뒤 렌더링합니다.
 
-필요한 패키지 정보는 `package.json`과 `package-lock.json`에 기록되어 있으므로, 프로젝트를 새로 받은 팀원은 `npm install`만 실행하면 됩니다.
+## 관련 문서
+
+- [통합 프로젝트 README](https://github.com/metanet-final-proj/Office-Link-Deploy)
+- [통합 배포 가이드](https://github.com/metanet-final-proj/Office-Link-Deploy/tree/main/deploy)
+- [보안 정책](SECURITY.md)
