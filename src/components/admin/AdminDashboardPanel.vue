@@ -1308,7 +1308,10 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 100;
-  padding: 32px;
+  padding:
+    calc(32px + env(safe-area-inset-top, 0px))
+    32px
+    calc(32px + env(safe-area-inset-bottom, 0px));
   background: rgba(23, 31, 49, 0.38);
   display: flex;
   align-items: center;
@@ -1318,6 +1321,10 @@ onBeforeUnmount(() => {
 .auth-log-modal {
   width: min(1080px, 100%);
   max-height: min(760px, calc(100vh - 64px));
+  max-height: min(
+    760px,
+    calc(100dvh - 64px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))
+  );
   border: 1px solid rgba(var(--color-border-muted-rgb), 0.92);
   border-radius: 10px;
   background: var(--color-surface-raised);
@@ -1328,6 +1335,7 @@ onBeforeUnmount(() => {
 }
 
 .auth-log-modal-header {
+  flex-shrink: 0;
   padding: 20px 22px 16px;
   border-bottom: 1px solid var(--color-border-light);
   display: flex;
@@ -1366,6 +1374,7 @@ onBeforeUnmount(() => {
 }
 
 .auth-log-filter {
+  flex-shrink: 0;
   padding: 16px 22px;
   border-bottom: 1px solid var(--color-border-light);
   display: flex;
@@ -1398,6 +1407,7 @@ onBeforeUnmount(() => {
 }
 
 .auth-log-modal-table-wrap {
+  flex: 1;
   min-height: 0;
   margin: 0 22px 4px;
   overflow: auto;
@@ -1440,6 +1450,7 @@ onBeforeUnmount(() => {
 }
 
 .auth-log-pagination {
+  flex-shrink: 0;
   padding: 14px 22px 18px;
   border-top: 1px solid var(--color-border-light);
   display: flex;
@@ -1561,7 +1572,16 @@ onBeforeUnmount(() => {
   }
 
   .auth-log-modal-backdrop {
-    padding: 14px;
+    padding:
+      calc(14px + env(safe-area-inset-top, 0px))
+      14px
+      calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .auth-log-modal {
+    max-height: calc(
+      100dvh - 28px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    );
   }
 
   .auth-log-filter {
@@ -1571,6 +1591,7 @@ onBeforeUnmount(() => {
 
   .auth-log-filter input {
     width: 100%;
+    font-size: 16px;
   }
 }
 

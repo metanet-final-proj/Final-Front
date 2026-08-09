@@ -396,7 +396,7 @@ const fillDraftFromStarter = async (query) => {
   await nextTick()
 
   if (composerInputRef.value) {
-    composerInputRef.value.focus()
+    composerInputRef.value.focus({ preventScroll: true })
   }
 }
 
@@ -2628,8 +2628,9 @@ onBeforeUnmount(() => {
   border: none;
 }
 
-.start-composer textarea {
-  font-size: 14px;
+.start-composer textarea,
+.composer-box textarea {
+  font-size: 16px;
 }
 
   .start-composer button {

@@ -19,6 +19,22 @@ const loginViewSource = readFileSync(
   'utf8',
 )
 const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
+const actionDraftContainerSource = readFileSync(
+  new URL('../src/components/chat/ActionDraftContainer.vue', import.meta.url),
+  'utf8',
+)
+const createOrganizationDialogSource = readFileSync(
+  new URL('../src/components/admin/CreateOrganizationDialog.vue', import.meta.url),
+  'utf8',
+)
+const organizationModalSource = readFileSync(
+  new URL('../src/components/admin/OrganizationManagementModal.vue', import.meta.url),
+  'utf8',
+)
+const adminDashboardSource = readFileSync(
+  new URL('../src/components/admin/AdminDashboardPanel.vue', import.meta.url),
+  'utf8',
+)
 const workhubPanelUrl = new URL(
   '../src/components/chat/WorkhubDetailPanel.vue',
   import.meta.url,
@@ -32,6 +48,25 @@ test('mobile sidebar content keeps safe-area-aware space above its controls', ()
     chatSidebarSource,
     /@media \(max-width: 820px\)[\s\S]*?\.sidebar-content\s*\{[\s\S]*?padding-top:\s*calc\(env\(safe-area-inset-top, 0px\) \+ 16px\)/,
   )
+  assert.match(
+    chatSidebarSource,
+    /@media \(max-width: 820px\)[\s\S]*?\.sidebar-profile-area\s*\{[\s\S]*?safe-area-inset-bottom/,
+  )
+})
+
+test('mobile action draft modal uses the dynamic viewport and safe areas', () => {
+  assert.match(actionDraftContainerSource, /max-height:[\s\S]*?100dvh/)
+  assert.match(actionDraftContainerSource, /safe-area-inset-bottom/)
+  assert.match(actionDraftContainerSource, /:deep\(input\)[\s\S]*?font-size:\s*16px/)
+})
+
+test('admin modals stay scrollable above mobile browser and keyboard UI', () => {
+  assert.match(createOrganizationDialogSource, /max-height:[\s\S]*?100dvh/)
+  assert.match(createOrganizationDialogSource, /\.create-dialog form\s*\{[\s\S]*?overflow-y:\s*auto/)
+  assert.match(organizationModalSource, /max-height:[\s\S]*?100dvh/)
+  assert.match(adminDashboardSource, /max-height:[\s\S]*?100dvh/)
+  assert.match(organizationModalSource, /safe-area-inset-bottom/)
+  assert.match(adminDashboardSource, /safe-area-inset-bottom/)
 })
 
 test('login remains scrollable when its card is taller than the mobile viewport', () => {
@@ -72,6 +107,24 @@ test('mypage chart containers can shrink with the responsive grid', () => {
   assert.match(
     myPageSource,
     /\.chart-stage\s*\{[\s\S]*?min-width:\s*0;/,
+  )
+})
+
+test('mobile mypage keeps its final chart above the device safe area', () => {
+  assert.match(
+    myPageSource,
+    /@media \(max-width: 720px\)[\s\S]*?\.mypage-panel\s*\{[\s\S]*?padding:[\s\S]*?env\(safe-area-inset-bottom, 0px\)/,
+  )
+})
+
+test('mobile chat inputs avoid iOS focus zoom', () => {
+  assert.match(
+    chatViewSource,
+    /@media \(max-width: 820px\)[\s\S]*?\.start-composer textarea,\s*\.composer-box textarea\s*\{\s*font-size:\s*16px;/,
+  )
+  assert.match(
+    chatViewSource,
+    /const fillDraftFromStarter[\s\S]*?focus\(\{ preventScroll: true \}\)/,
   )
 })
 

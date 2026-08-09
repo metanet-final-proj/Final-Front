@@ -1426,6 +1426,10 @@ onBeforeUnmount(() => {
   .sidebar-content {
     padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
   }
+
+  .sidebar-profile-area {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -355,7 +355,7 @@ onBeforeUnmount(() => {
     radial-gradient(circle at 16% 0%, rgba(var(--color-primary-light-rgb), 0.16), transparent 34%),
     radial-gradient(circle at 88% 8%, rgba(var(--color-sky-rgb), 0.16), transparent 30%),
     linear-gradient(180deg, var(--color-page-gradient-start) 0%, var(--color-surface-raised) 62%);
-  padding: 36px 44px 42px;
+  padding: 36px 44px calc(42px + env(safe-area-inset-bottom, 0px));
 }
 
 .mypage-grid {
@@ -639,7 +639,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 720px) {
   .mypage-panel {
-    padding: 18px;
+    padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0px));
   }
 
   .kpi-card {

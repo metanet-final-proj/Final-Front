@@ -123,7 +123,10 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 120;
-  padding: 20px;
+  padding:
+    calc(20px + env(safe-area-inset-top, 0px))
+    20px
+    calc(20px + env(safe-area-inset-bottom, 0px));
   background: rgba(23, 31, 49, 0.34);
   display: flex;
   align-items: center;
@@ -132,14 +135,21 @@ onBeforeUnmount(() => {
 
 .create-dialog {
   width: min(480px, 100%);
+  max-height: calc(100vh - 40px);
+  max-height: calc(
+    100dvh - 40px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+  );
   border: 1px solid rgba(var(--color-border-muted-rgb), 0.92);
   border-radius: 10px;
   background: var(--color-surface-raised);
   box-shadow: 0 30px 80px rgba(var(--color-primary-rgb), 0.28);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
 .create-dialog-header {
+  flex-shrink: 0;
   padding: 20px 22px 16px;
   border-bottom: 1px solid var(--color-border-light);
   display: flex;
@@ -173,7 +183,10 @@ onBeforeUnmount(() => {
 }
 
 .create-dialog form {
+  min-height: 0;
   padding: 22px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .form-field {
@@ -256,13 +269,27 @@ onBeforeUnmount(() => {
 
 @media (max-width: 520px) {
   .create-dialog-backdrop {
-    padding: 14px;
+    padding:
+      calc(14px + env(safe-area-inset-top, 0px))
+      14px
+      calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .create-dialog {
+    max-height: calc(100vh - 28px);
+    max-height: calc(
+      100dvh - 28px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    );
   }
 
   .create-dialog-header,
   .create-dialog form {
     padding-right: 16px;
     padding-left: 16px;
+  }
+
+  .form-field input {
+    font-size: 16px;
   }
 }
 </style>

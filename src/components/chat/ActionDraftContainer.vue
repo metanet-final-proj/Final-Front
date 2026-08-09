@@ -77,14 +77,22 @@ const emit = defineEmits(['close', 'confirm'])
   z-index: 2000;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding:
+    calc(20px + env(safe-area-inset-top, 0px))
+    20px
+    calc(20px + env(safe-area-inset-bottom, 0px));
   background: rgba(15, 23, 42, .42);
 }
 
 .action-draft-modal {
   width: min(var(--action-draft-width), 100%);
   max-height: calc(100vh - 40px);
-  overflow: auto;
+  max-height: calc(
+    100dvh - 40px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+  );
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface-raised);
@@ -92,6 +100,7 @@ const emit = defineEmits(['close', 'confirm'])
 }
 
 .action-draft-header {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -123,14 +132,23 @@ const emit = defineEmits(['close', 'confirm'])
 }
 
 .action-draft-form {
+  flex: 1;
+  min-height: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .action-draft-body {
+  flex: 1;
   min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .action-draft-footer {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -170,13 +188,23 @@ const emit = defineEmits(['close', 'confirm'])
 @media (max-width: 620px) {
   .action-draft-backdrop {
     align-items: end;
-    padding: 0;
+    padding: env(safe-area-inset-top, 0px) 0 0;
   }
 
   .action-draft-modal {
     width: 100%;
-    max-height: 92vh;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px));
     border-radius: 8px 8px 0 0;
+  }
+
+  .action-draft-footer {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .action-draft-body :deep(input),
+  .action-draft-body :deep(textarea),
+  .action-draft-body :deep(select) {
+    font-size: 16px;
   }
 }
 </style>

@@ -269,7 +269,10 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 110;
-  padding: 32px;
+  padding:
+    calc(32px + env(safe-area-inset-top, 0px))
+    32px
+    calc(32px + env(safe-area-inset-bottom, 0px));
   background: rgba(23, 31, 49, 0.38);
   display: flex;
   align-items: center;
@@ -279,6 +282,10 @@ onBeforeUnmount(() => {
 .organization-modal {
   width: min(1080px, 100%);
   max-height: min(760px, calc(100vh - 64px));
+  max-height: min(
+    760px,
+    calc(100dvh - 64px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))
+  );
   border: 1px solid rgba(var(--color-border-muted-rgb), 0.92);
   border-radius: 10px;
   background: var(--color-surface-raised);
@@ -289,6 +296,7 @@ onBeforeUnmount(() => {
 }
 
 .organization-modal-header {
+  flex-shrink: 0;
   padding: 20px 22px 16px;
   border-bottom: 1px solid var(--color-border-light);
   display: flex;
@@ -329,6 +337,7 @@ onBeforeUnmount(() => {
 
 .organization-toolbar {
   min-height: 69px;
+  flex-shrink: 0;
   padding: 16px 22px;
   border-bottom: 1px solid var(--color-border-light);
   display: flex;
@@ -368,6 +377,7 @@ onBeforeUnmount(() => {
 }
 
 .organization-table-wrap {
+  flex: 1;
   min-height: 0;
   margin: 0 22px 4px;
   overflow: auto;
@@ -438,6 +448,7 @@ onBeforeUnmount(() => {
 
 .organization-pagination {
   min-height: 65px;
+  flex-shrink: 0;
   padding: 14px 22px 18px;
   border-top: 1px solid var(--color-border-light);
   display: flex;
@@ -470,11 +481,16 @@ onBeforeUnmount(() => {
 
 @media (max-width: 720px) {
   .organization-modal-backdrop {
-    padding: 14px;
+    padding:
+      calc(14px + env(safe-area-inset-top, 0px))
+      14px
+      calc(14px + env(safe-area-inset-bottom, 0px));
   }
 
   .organization-modal {
-    max-height: calc(100vh - 28px);
+    max-height: calc(
+      100dvh - 28px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    );
   }
 
   .organization-modal-header,
@@ -486,6 +502,10 @@ onBeforeUnmount(() => {
   .organization-table-wrap {
     margin-right: 16px;
     margin-left: 16px;
+  }
+
+  .organization-status-select {
+    font-size: 16px;
   }
 }
 </style>
