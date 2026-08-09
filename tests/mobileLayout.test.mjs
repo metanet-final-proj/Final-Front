@@ -14,6 +14,11 @@ const chatViewSource = readFileSync(
   new URL('../src/views/ChatView.vue', import.meta.url),
   'utf8',
 )
+const loginViewSource = readFileSync(
+  new URL('../src/views/LoginView.vue', import.meta.url),
+  'utf8',
+)
+const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
 const workhubPanelUrl = new URL(
   '../src/components/chat/WorkhubDetailPanel.vue',
   import.meta.url,
@@ -27,6 +32,25 @@ test('mobile sidebar content keeps safe-area-aware space above its controls', ()
     chatSidebarSource,
     /@media \(max-width: 820px\)[\s\S]*?\.sidebar-content\s*\{[\s\S]*?padding-top:\s*calc\(env\(safe-area-inset-top, 0px\) \+ 16px\)/,
   )
+})
+
+test('login remains scrollable when its card is taller than the mobile viewport', () => {
+  assert.match(loginViewSource, /\.login-page\s*\{[\s\S]*?min-height:\s*100dvh;/)
+  assert.match(loginViewSource, /\.login-page\s*\{[\s\S]*?overflow-y:\s*auto;/)
+  assert.match(
+    loginViewSource,
+    /@media \(max-width: 860px\)[\s\S]*?\.login-page\s*\{[\s\S]*?align-items:\s*flex-start;/,
+  )
+})
+
+test('chat uses the dynamic viewport and keeps its composer above the safe area', () => {
+  assert.doesNotMatch(chatViewSource, /:global\(html\)[\s\S]*?overflow:\s*hidden;/)
+  assert.match(chatViewSource, /\.chat-shell\s*\{[\s\S]*?height:\s*100dvh;/)
+  assert.match(
+    chatViewSource,
+    /\.composer-area\s*\{[\s\S]*?padding:[\s\S]*?env\(safe-area-inset-bottom, 0px\)/,
+  )
+  assert.match(indexSource, /viewport-fit=cover/)
 })
 
 test('responsive mypage gives the range filter its own grid row', () => {

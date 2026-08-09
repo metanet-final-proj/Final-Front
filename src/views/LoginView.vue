@@ -56,8 +56,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  min-height: 100vh;
+  min-height: 100svh;
   min-height: 100dvh;
   padding: clamp(40px, 6vh, 72px) 24px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .login-card {
@@ -74,11 +78,13 @@ onBeforeUnmount(() => {
 
 @media (max-width: 860px) {
   .login-page {
+    align-items: flex-start;
     padding: 28px 18px calc(36px + env(safe-area-inset-bottom, 0px));
   }
 
   .login-card {
     flex-direction: column;
+    min-height: auto;
   }
 }
 </style>

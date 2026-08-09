@@ -1710,16 +1710,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-:global(html),
-:global(body),
-:global(#app) {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
 .chat-shell {
-  height: 100%;
+  height: 100vh;
+  height: 100svh;
+  height: 100dvh;
+  min-height: 0;
   color: var(--color-text);
   display: flex;
   flex-direction: column;
@@ -2405,7 +2400,8 @@ onBeforeUnmount(() => {
 }
 
 .composer-area {
-  padding: 16px 24px 12px;
+  flex-shrink: 0;
+  padding: 16px 24px calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--color-border-light);
   background: var(--color-surface-raised);
 }
@@ -2587,6 +2583,11 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 820px) {
+  .composer-area {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
   .message-row.assistant,
   .message-row.assistant.has-structured-content {
     width: 100%;
