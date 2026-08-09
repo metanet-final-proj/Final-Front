@@ -400,6 +400,10 @@ const fillDraftFromStarter = async (query) => {
   }
 }
 
+const focusNewChatComposer = () => {
+  composerInputRef.value?.focus({ preventScroll: true })
+}
+
 const cleanupVoiceRecording = () => {
   if (recordingTimer) {
     window.clearTimeout(recordingTimer)
@@ -710,10 +714,7 @@ const createNewChat = async (initialTitle = '') => {
     draft.value = ''
 
     await nextTick()
-
-    if (composerInputRef.value) {
-      composerInputRef.value.focus()
-    }
+    focusNewChatComposer()
 
     return null
   }
@@ -750,10 +751,7 @@ const createNewChat = async (initialTitle = '') => {
     draft.value = ''
 
     await nextTick()
-
-    if (composerInputRef.value) {
-      composerInputRef.value.focus()
-    }
+    focusNewChatComposer()
 
     await scrollThread({ force: true })
 

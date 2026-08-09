@@ -128,6 +128,17 @@ test('mobile chat inputs avoid iOS focus zoom', () => {
   )
 })
 
+test('starting a new chat focuses without scrolling while mobile font sizing prevents zoom', () => {
+  assert.match(
+    chatViewSource,
+    /const focusNewChatComposer[\s\S]*?focus\(\{ preventScroll: true \}\)/,
+  )
+  assert.match(
+    chatViewSource,
+    /const createNewChat[\s\S]*?focusNewChatComposer\(\)[\s\S]*?focusNewChatComposer\(\)/,
+  )
+})
+
 test('chat view delegates workhub details to a focused component', () => {
   assert.match(chatViewSource, /import WorkhubDetailPanel from/)
   assert.match(chatViewSource, /<WorkhubDetailPanel/)
